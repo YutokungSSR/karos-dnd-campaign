@@ -53,9 +53,10 @@ export default function CampaignPage() {
   async function createCharacter(event: FormEvent) {
     event.preventDefault();
     if (!user || !newCharacterName.trim()) return;
-    const { data, error } = await getSupabase().from("characters").insert({ owner_id: user.id, campaign_id: id, name: newCharacterName.trim() }).select("id").single();
+    const characterId = crypto.randomUUID();
+    const { error } = await getSupabase().from("characters").insert({ id: characterId, owner_id: user.id, campaign_id: id, name: newCharacterName.trim() });
     if (error) return setMessage(error.message);
-    window.location.href = `/character/${data.id}`;
+    window.location.href = `/character/${characterId}`;
   }
 
   async function changeHp(character: any, amount: number) {
@@ -91,7 +92,7 @@ export default function CampaignPage() {
                 const hpPercent = character.max_hp ? Math.round(character.current_hp / character.max_hp * 100) : 0;
                 return <div className="partyRow" key={character.id}>
                   <Link href={`/character/${character.id}`} className="partyIdentity"><div className="avatarCircle">{character.portrait_url ? <img src={character.portrait_url} alt="" /> : "♜"}</div><div><small>{character.rank} · LV.{character.level}</small><strong>{character.name}</strong><span>{character.class_name || "ไม่ระบุคลาส"}</span></div></Link>
-                  <div className="partyResources"><div className="miniResource"><span>HP {character.current_hp}/{character.max_hp}</span><div><i style={{ width: `${hpPercent}%` }} /></div></div>{isDm ? <div className="hpControls"><button onClick={() => changeHp(character, -5)}>−5</button><button onClick={() => changeHp(character, -1)}>−1</button><button onClick={() => changeHp(character, 1)}>+1</button><button onClick={() => changeHp(character, 5)}>+5</button></div> : null}</div>
+                  <div className="partyResources"><div className="miniResource"><span>HP {character.current_hp}/{character.max_hp}</span><div><i style={{ width: `${hpPercent}%` }} /></div></div>{isDm ? <div className="hpControls"><button onClick={() => changeHp(character, -5)}>−5</button><button onClick={() => changeHp(character, -1)}>−1</button><button onClick={() => changeHp(character, 1)}>+1</button><button onClick={() => changeHp(character, 5)}>+5</button><Link href={`/character/${character.id}#inventory`}>เปิดคลัง</Link></div> : null}</div>
                 </div>;
               }) : <p className="emptyText">ยังไม่มีตัวละครในแคมเปญนี้</p>}
             </div>

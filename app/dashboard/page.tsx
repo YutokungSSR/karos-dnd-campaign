@@ -66,13 +66,15 @@ export default function DashboardPage() {
   async function createCharacter(event: FormEvent) {
     event.preventDefault();
     if (!user || !characterName.trim()) return;
-    const { data, error } = await getSupabase().from("characters").insert({
+    const characterId = crypto.randomUUID();
+    const { error } = await getSupabase().from("characters").insert({
+      id: characterId,
       owner_id: user.id,
       campaign_id: characterCampaign || null,
       name: characterName.trim(),
-    }).select("id").single();
+    });
     if (error) return setMessage(error.message);
-    window.location.href = `/character/${data.id}`;
+    window.location.href = `/character/${characterId}`;
   }
 
   if (authLoading || loading) return <main className="appShell"><Loading /></main>;
