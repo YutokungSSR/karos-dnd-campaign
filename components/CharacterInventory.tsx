@@ -87,12 +87,16 @@ const MIME_EXTENSIONS: Record<string, string> = {
   "image/gif": "gif",
 };
 
+const TEMMA_FORMATTER = new Intl.NumberFormat("th-TH");
+
 export default function CharacterInventory({
   character,
   items,
   capacity,
+  temmaBalance,
   canManage,
   canAddItems,
+  canDeleteItems,
   databaseReady,
   onChanged,
   onMessage,
@@ -100,8 +104,10 @@ export default function CharacterInventory({
   character: InventoryCharacter;
   items: InventoryItem[];
   capacity: number;
+  temmaBalance: number;
   canManage: boolean;
   canAddItems: boolean;
+  canDeleteItems: boolean;
   databaseReady: boolean;
   onChanged: () => Promise<void> | void;
   onMessage: (message: string) => void;
@@ -113,9 +119,11 @@ export default function CharacterInventory({
   const [signedImages, setSignedImages] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [capacityDraft, setCapacityDraft] = useState(capacity);
+  const [temmaAmount, setTemmaAmount] = useState(1);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const canManageInventory = canManage && databaseReady;
   const canAdd = canAddItems && databaseReady;
+  const canDelete = canDeleteItems && databaseReady;
   const canEquip = canAddItems && databaseReady;
 
   useEffect(() => setCapacityDraft(capacity), [capacity]);
@@ -313,15 +321,19 @@ export default function CharacterInventory({
   }
 
   async function deleteItem(item: InventoryItem) {
-    if (!canManageInventory || saving) return;
+    if (!canDelete || saving) return;
     if (!window.confirm(`ลบ “${item.name}” ออกจากคลังใช่หรือไม่?`)) return;
     setSaving(true);
     try {
       const supabase = getSupabase();
       const { error } = await supabase.from("inventory_items").delete().eq("id", item.id);
       if (error) throw error;
-      if (item.image_path) await supabase.storage.from("inventory-item-images").remove([item.image_path]);
-      onMessage("ลบไอเทมออกจากคลังแล้ว");
+      const { error: imageError } = item.image_path
+        ? await supabase.storage.from("inventory-item-images").remove([item.image_path])
+        : { error: null };
+      onMessage(imageError
+        ? `ลบไอเทมแล้ว แต่ลบไฟล์ภาพไม่สำเร็จ: ${imageError.message}`
+        : "ลบไอเทมออกจากคลังแล้ว");
       setDialogState(null);
       await onChanged();
     } catch (error) {
@@ -393,6 +405,36 @@ export default function CharacterInventory({
     }
   }
 
+  async function adjustTemma(direction: 1 | -1) {
+    if (!canManageInventory || saving) return;
+    const amount = Number(temmaAmount);
+    if (!Number.isSafeInteger(amount) || amount < 1) {
+      onMessage("จำนวนเทมมาต้องเป็นเลขจำนวนเต็มตั้งแต่ 1 ขึ้นไป");
+      return;
+    }
+    if (direction < 0 && amount > temmaBalance) {
+      onMessage(`ยอดเงินมีเพียง ${TEMMA_FORMATTER.format(temmaBalance)} เทมมา จึงลดมากกว่านี้ไม่ได้`);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await getSupabase().rpc("adjust_character_temma", {
+        target_character_id: character.id,
+        amount_delta: direction * amount,
+      });
+      if (error) throw error;
+      onMessage(direction > 0
+        ? `เพิ่มเงิน ${TEMMA_FORMATTER.format(amount)} เทมมาแล้ว`
+        : `ลดเงิน ${TEMMA_FORMATTER.format(amount)} เทมมาแล้ว`);
+      await onChanged();
+    } catch (error) {
+      onMessage(errorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const selectedItem = dialogState?.kind === "item" && dialogState.itemId
     ? items.find((item) => item.id === dialogState.itemId) ?? null
     : null;
@@ -417,7 +459,7 @@ export default function CharacterInventory({
         <div>
           <p className="eyebrow">Adventurer Inventory</p>
           <h2 id="inventory-title">คลังสมบัติของ {character.name}</h2>
-          <p>{canManage ? "โหมด Dungeon Master · จัดการคลังและอุปกรณ์ได้ทั้งหมด" : "โหมดผู้เล่น · เพิ่มไอเทมและสวมใส่ได้ · การแก้หรือลบให้ DM จัดการ"}</p>
+          <p>{canManage ? "โหมด Dungeon Master · จัดการคลัง อุปกรณ์ และเงินเทมมาได้ทั้งหมด" : "โหมดผู้เล่น · เพิ่ม ลบ และสวมใส่ไอเทมได้ · การแก้รายละเอียดให้ DM จัดการ"}</p>
         </div>
         {canAddItems ? <button className="button" type="button" onClick={() => openNewItem()} disabled={isFull || !canAdd}>＋ เพิ่มไอเทม</button> : null}
       </div>
@@ -457,18 +499,46 @@ export default function CharacterInventory({
         </section>
 
         <section className="bagPane" aria-label="ช่องเก็บของ">
-          <div className="inventoryFilters" aria-label="หมวดหมู่ไอเทม">
-            {CATEGORY_OPTIONS.map((category) => (
-              <button
-                type="button"
-                key={category.key}
-                className={activeCategory === category.key ? "active" : ""}
-                aria-pressed={activeCategory === category.key}
-                onClick={() => setActiveCategory(category.key)}
-              >
-                <span>{category.symbol}</span>{category.label}
-              </button>
-            ))}
+          <div className="bagToolbar">
+            <div className="inventoryFilters" aria-label="หมวดหมู่ไอเทม">
+              {CATEGORY_OPTIONS.map((category) => (
+                <button
+                  type="button"
+                  key={category.key}
+                  className={activeCategory === category.key ? "active" : ""}
+                  aria-pressed={activeCategory === category.key}
+                  onClick={() => setActiveCategory(category.key)}
+                >
+                  <span>{category.symbol}</span>{category.label}
+                </button>
+              ))}
+            </div>
+
+            <aside className="temmaWallet" aria-label="ยอดเงินเทมมา">
+              <span className="temmaCoin" aria-hidden="true">◈</span>
+              <div className="temmaBalance">
+                <small>ยอดเงิน</small>
+                <strong aria-live="polite">{TEMMA_FORMATTER.format(temmaBalance)}</strong>
+                <span>เทมมา</span>
+              </div>
+              {canManage ? (
+                <div className="temmaControls">
+                  <label htmlFor="temma-amount">จำนวน</label>
+                  <input
+                    id="temma-amount"
+                    type="number"
+                    min="1"
+                    max={Number.MAX_SAFE_INTEGER}
+                    step="1"
+                    value={temmaAmount}
+                    disabled={!canManageInventory || saving}
+                    onChange={(event) => setTemmaAmount(Number(event.target.value))}
+                  />
+                  <button className="tinyButton danger" type="button" disabled={!canManageInventory || saving} onClick={() => adjustTemma(-1)} aria-label="ลดเงินเทมมา">− ลด</button>
+                  <button className="tinyButton" type="button" disabled={!canManageInventory || saving} onClick={() => adjustTemma(1)} aria-label="เพิ่มเงินเทมมา">＋ เพิ่ม</button>
+                </div>
+              ) : null}
+            </aside>
           </div>
 
           <div className="inventoryGrid">
@@ -547,7 +617,7 @@ export default function CharacterInventory({
             ) : null}
 
             <div className="dialogActions">
-              {selectedItem && canManageInventory ? <button className="button danger" type="button" onClick={() => deleteItem(selectedItem)} disabled={saving}>ลบไอเทม</button> : <span />}
+              {selectedItem && canDelete ? <button className="button danger" type="button" onClick={() => deleteItem(selectedItem)} disabled={saving}>ลบไอเทม</button> : <span />}
               <div><button className="button ghost" type="button" onClick={closeDialog} disabled={saving}>{canEditItemForm ? "ยกเลิก" : "ปิด"}</button>{canEditItemForm ? <button className="button" type="button" onClick={saveItem} disabled={saving}>{saving ? "กำลังบันทึก…" : "บันทึกไอเทม"}</button> : null}</div>
             </div>
           </div>

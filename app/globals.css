@@ -248,10 +248,21 @@ select option { color:#1b1209; }
 .equipmentHint { margin:12px 0 0; text-align:center; color:#928064; font-size:.73rem; }
 
 .bagPane { display:flex; flex-direction:column; background:linear-gradient(145deg,rgba(20,14,10,.78),rgba(8,7,5,.9)); }
-.inventoryFilters { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:15px; }
+.bagToolbar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:15px; }
+.inventoryFilters { flex:1 1 300px; display:flex; flex-wrap:wrap; gap:7px; }
 .inventoryFilters button { min-height:40px; display:flex; align-items:center; gap:6px; padding:8px 11px; color:#b9a687; border:1px solid rgba(216,179,95,.2); border-radius:9px; background:rgba(255,255,255,.025); transition:.2s ease; }
 .inventoryFilters button span { color:var(--gold); }
 .inventoryFilters button:hover,.inventoryFilters button.active { color:#fff1d2; border-color:rgba(244,221,160,.62); background:rgba(111,76,35,.4); box-shadow:0 8px 18px rgba(0,0,0,.22); }
+.temmaWallet { flex:0 1 320px; display:grid; grid-template-columns:48px minmax(0,1fr); gap:8px 10px; align-items:center; padding:10px 12px; border:1px solid rgba(244,221,160,.42); border-radius:12px; background:radial-gradient(circle at 18% 45%,rgba(244,197,76,.16),transparent 34%),linear-gradient(145deg,rgba(76,50,23,.76),rgba(15,10,7,.96)); box-shadow:inset 0 0 24px rgba(216,179,95,.04),0 9px 24px rgba(0,0,0,.22); }
+.temmaCoin { width:46px; aspect-ratio:1; display:grid; place-items:center; color:#2f1d09; border:2px solid #f0d178; border-radius:50%; background:radial-gradient(circle at 34% 30%,#fff0a9,#d6a63c 58%,#76501e); box-shadow:0 0 18px rgba(233,190,76,.22),inset 0 0 0 4px rgba(65,39,11,.22); font-size:1.35rem; font-weight:900; }
+.temmaBalance { min-width:0; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; column-gap:7px; }
+.temmaBalance small { grid-column:1/-1; color:#a99575; font-size:.62rem; letter-spacing:.12em; text-transform:uppercase; }
+.temmaBalance strong { overflow:hidden; color:#ffe49b; font-family:Georgia,"Times New Roman",serif; font-size:1.35rem; line-height:1.1; text-overflow:ellipsis; }
+.temmaBalance span { color:#d0b775; font-size:.72rem; font-weight:700; }
+.temmaControls { grid-column:1/-1; display:grid; grid-template-columns:auto minmax(78px,1fr) auto auto; gap:6px; align-items:center; padding-top:8px; border-top:1px solid rgba(216,179,95,.16); }
+.temmaControls label { color:#9f8b6b; font-size:.65rem; }
+.temmaControls input { min-width:0; padding:6px 7px; }
+.temmaControls .tinyButton { min-height:32px; padding:5px 8px; }
 .inventoryGrid { --inventory-columns:5; display:grid; grid-template-columns:repeat(var(--inventory-columns),minmax(84px,1fr)); gap:9px; align-content:start; flex:1; }
 .inventoryCell { position:relative; min-width:0; aspect-ratio:1/1.12; display:grid; grid-template-rows:1fr auto; place-items:center; gap:5px; padding:8px; overflow:hidden; color:#6f604c; border:1px solid rgba(216,179,95,.16); border-radius:10px; background:radial-gradient(circle at center,rgba(216,179,95,.035),transparent 62%),rgba(255,255,255,.018); box-shadow:inset 0 0 20px rgba(0,0,0,.36); transition:.2s ease; }
 .inventoryCell:not(:disabled):hover { transform:translateY(-3px); color:#bfa988; border-color:rgba(216,179,95,.46); background:rgba(216,179,95,.055); }
@@ -342,6 +353,8 @@ select option { color:#1b1209; }
   .characterViewTabs { grid-template-columns:1fr; }
   .inventoryHeader { align-items:stretch; flex-direction:column; padding:16px; }
   .equipmentPane,.bagPane { padding:12px; }
+  .bagToolbar { align-items:stretch; flex-direction:column; }
+  .temmaWallet { width:100%; flex-basis:auto; }
   .equipmentBoard { height:540px; }
   .inventoryCharacterFigure { inset:82px 82px 72px; }
   .equipmentSlot { width:76px; height:91px; grid-template-rows:auto 40px minmax(0,1fr); padding:4px; }
@@ -371,6 +384,8 @@ select option { color:#1b1209; }
   .equipmentSlot[data-slot="legs"] { top:277px; }
   .inventoryGrid { grid-template-columns:repeat(2,minmax(76px,1fr)); }
   .inventoryFilters button { flex:1 1 calc(50% - 7px); justify-content:center; }
+  .temmaControls { grid-template-columns:1fr 1fr; }
+  .temmaControls label,.temmaControls input { grid-column:1/-1; }
   .capacityFooter { grid-template-columns:1fr; }
   .capacitySummary { text-align:left; }
   .capacityEditor { grid-column:auto; }

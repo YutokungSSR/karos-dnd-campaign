@@ -20,6 +20,7 @@ export default function CharacterPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [conditions, setConditions] = useState<any[]>([]);
   const [inventoryCapacity, setInventoryCapacity] = useState(10);
+  const [inventoryTemma, setInventoryTemma] = useState(0);
   const [inventoryReady, setInventoryReady] = useState(true);
   const [isDm, setIsDm] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -36,7 +37,7 @@ export default function CharacterPage() {
       supabase.from("skills").select("*").eq("character_id", id).order("sort_order"),
       supabase.from("inventory_items").select("*").eq("character_id", id),
       supabase.from("conditions").select("*").eq("character_id", id).order("created_at"),
-      supabase.from("character_inventories").select("capacity").eq("character_id", id).maybeSingle(),
+      supabase.from("character_inventories").select("capacity, temma_balance").eq("character_id", id).maybeSingle(),
     ]);
     const char = characterResult.data;
     setCharacter(char);
@@ -51,6 +52,7 @@ export default function CharacterPage() {
     })).sort((a: InventoryItem, b: InventoryItem) => a.slot_index - b.slot_index));
     setConditions(conditionResult.data ?? []);
     setInventoryCapacity(inventoryResult.data?.capacity ?? 10);
+    setInventoryTemma(Number(inventoryResult.data?.temma_balance ?? 0));
     setInventoryReady(!inventoryResult.error && !itemResult.error);
     if (char?.campaign_id) {
       const { data: campaign } = await supabase.from("campaigns").select("dm_user_id").eq("id", char.campaign_id).maybeSingle();
@@ -223,8 +225,10 @@ export default function CharacterPage() {
           character={character}
           items={items}
           capacity={inventoryCapacity}
+          temmaBalance={inventoryTemma}
           canManage={isDm}
           canAddItems={character.owner_id === user?.id || isDm}
+          canDeleteItems={character.owner_id === user?.id || isDm}
           databaseReady={inventoryReady}
           onChanged={load}
           onMessage={setMessage}

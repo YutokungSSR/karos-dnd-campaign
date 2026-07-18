@@ -61,9 +61,27 @@ create table if not exists public.characters (
 create table if not exists public.character_inventories (
   character_id uuid primary key references public.characters(id) on delete cascade,
   capacity integer not null default 10 check (capacity between 1 and 200),
+  temma_balance bigint not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.character_inventories
+  add column if not exists temma_balance bigint not null default 0;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'character_inventories_temma_balance_check'
+      and conrelid = 'public.character_inventories'::regclass
+  ) then
+    alter table public.character_inventories
+      add constraint character_inventories_temma_balance_check
+      check (temma_balance between 0 and 9007199254740991);
+  end if;
+end;
+$$;
 
 create table if not exists public.skills (
   id uuid primary key default gen_random_uuid(),
@@ -360,6 +378,57 @@ begin
 end;
 $$;
 
+create or replace function private.adjust_character_temma_checked(target_character_id uuid, amount_delta bigint)
+returns bigint language plpgsql volatile security definer set search_path = '' as $$
+declare
+  caller_id uuid := (select auth.uid());
+  current_balance bigint;
+  next_balance numeric;
+  updated_balance bigint;
+begin
+  if caller_id is null then
+    raise exception 'Authentication required' using errcode = '42501';
+  end if;
+  if amount_delta is null or amount_delta = 0 then
+    raise exception 'Temma adjustment must not be zero' using errcode = '22023';
+  end if;
+
+  select inventory.temma_balance into current_balance
+  from public.character_inventories inventory
+  join public.characters character on character.id = inventory.character_id
+  join public.campaigns campaign on campaign.id = character.campaign_id
+  where inventory.character_id = target_character_id
+    and campaign.dm_user_id = caller_id
+  for update of inventory;
+
+  if not found then
+    raise exception 'Only the campaign DM can adjust Temma' using errcode = '42501';
+  end if;
+
+  next_balance := current_balance::numeric + amount_delta::numeric;
+  if next_balance < 0 then
+    raise exception 'Temma balance cannot be negative' using errcode = '23514';
+  end if;
+  if next_balance > 9007199254740991 then
+    raise exception 'Temma balance exceeds the supported maximum' using errcode = '23514';
+  end if;
+
+  update public.character_inventories
+  set temma_balance = next_balance::bigint
+  where character_id = target_character_id
+  returning temma_balance into updated_balance;
+  return updated_balance;
+end;
+$$;
+
+revoke all on function private.adjust_character_temma_checked(uuid, bigint) from public, anon, authenticated;
+grant execute on function private.adjust_character_temma_checked(uuid, bigint) to authenticated;
+
+create or replace function public.adjust_character_temma(target_character_id uuid, amount_delta bigint)
+returns bigint language sql volatile security invoker set search_path = '' as $$
+  select private.adjust_character_temma_checked(target_character_id, amount_delta);
+$$;
+
 create or replace function private.unequip_inventory_item_checked(target_item_id uuid)
 returns void language plpgsql security definer set search_path = '' as $$
 declare target_character uuid;
@@ -385,9 +454,11 @@ $$;
 revoke all on function public.equip_inventory_item(uuid, text) from public, anon;
 revoke all on function public.unequip_inventory_item(uuid) from public, anon;
 revoke all on function public.resize_character_inventory(uuid, integer) from public, anon;
+revoke all on function public.adjust_character_temma(uuid, bigint) from public, anon;
 grant execute on function public.equip_inventory_item(uuid, text) to authenticated;
 grant execute on function public.unequip_inventory_item(uuid) to authenticated;
 grant execute on function public.resize_character_inventory(uuid, integer) to authenticated;
+grant execute on function public.adjust_character_temma(uuid, bigint) to authenticated;
 
 create or replace function public.join_campaign_by_code(code_input text)
 returns uuid language plpgsql security definer set search_path = public as $$
@@ -462,7 +533,7 @@ create policy "dm updates inventory settings" on public.character_inventories fo
 create policy "owner and dm view inventory items" on public.inventory_items for select to authenticated using ((select private.can_view_character_inventory(character_id)));
 create policy "owner and dm insert inventory items" on public.inventory_items for insert to authenticated with check ((select private.can_manage_character_inventory(character_id)) or ((select private.can_view_character_inventory(character_id)) and equipment_slot is null));
 create policy "dm updates inventory items" on public.inventory_items for update to authenticated using ((select private.can_manage_character_inventory(character_id))) with check ((select private.can_manage_character_inventory(character_id)));
-create policy "dm deletes inventory items" on public.inventory_items for delete to authenticated using ((select private.can_manage_character_inventory(character_id)));
+create policy "owner and dm delete inventory items" on public.inventory_items for delete to authenticated using ((select private.can_view_character_inventory(character_id)));
 
 create policy "view permitted conditions" on public.conditions for select to anon, authenticated using (public.can_view_character(character_id));
 create policy "edit permitted conditions insert" on public.conditions for insert to authenticated with check (public.can_edit_character(character_id));
@@ -497,7 +568,7 @@ create policy "portrait deletes in own folder" on storage.objects for delete to 
 create policy "inventory images readable by owner and dm" on storage.objects for select to authenticated using (bucket_id='inventory-item-images' and (select private.can_view_character_inventory(private.inventory_character_id_from_path(name))));
 create policy "inventory images uploaded by owner and dm" on storage.objects for insert to authenticated with check (bucket_id='inventory-item-images' and (select private.can_view_character_inventory(private.inventory_character_id_from_path(name))));
 create policy "inventory images updated by dm" on storage.objects for update to authenticated using (bucket_id='inventory-item-images' and (select private.can_manage_character_inventory(private.inventory_character_id_from_path(name)))) with check (bucket_id='inventory-item-images' and (select private.can_manage_character_inventory(private.inventory_character_id_from_path(name))));
-create policy "inventory images deleted by owner and dm" on storage.objects for delete to authenticated using (bucket_id='inventory-item-images' and ((select private.can_manage_character_inventory(private.inventory_character_id_from_path(name))) or owner_id = (select auth.uid())::text));
+create policy "inventory images deleted by owner and dm" on storage.objects for delete to authenticated using (bucket_id='inventory-item-images' and (select private.can_view_character_inventory(private.inventory_character_id_from_path(name))));
 
 -- Enable Realtime for party HP and dice history.
 do $$ begin
