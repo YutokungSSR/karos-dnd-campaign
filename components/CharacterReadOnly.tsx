@@ -5,13 +5,11 @@ const STAT_LABELS = ["STR", "VIT", "AGI", "INT", "DEX", "WIS", "CHA"];
 export default function CharacterReadOnly({
   character,
   skills,
-  items,
   conditions,
   actions,
 }: {
   character: any;
   skills: any[];
-  items: any[];
   conditions: any[];
   actions?: ReactNode;
 }) {
@@ -68,18 +66,10 @@ export default function CharacterReadOnly({
           </div>
         </div>
 
-        <div className="sheetSection twoColumns">
-          <div>
-            <h2 className="ornamentTitle">คลังไอเทม</h2>
-            <div className="stackList">
-              {items.length ? items.map((item) => <div className="listRow" key={item.id}><span>{item.equipped ? "◆" : "◇"}</span><div><strong>{item.name}</strong><small>{item.item_type || "ไอเทม"} · จำนวน {item.quantity}</small></div></div>) : <p className="emptyText">ยังไม่มีไอเทม</p>}
-            </div>
-          </div>
-          <div>
-            <h2 className="ornamentTitle">สถานะผิดปกติ</h2>
-            <div className="stackList">
-              {conditions.length ? conditions.map((condition) => <div className="listRow warning" key={condition.id}><span>✧</span><div><strong>{condition.name}</strong><small>{condition.description || "ไม่มีรายละเอียด"}</small></div></div>) : <p className="emptyText">ไม่มีสถานะผิดปกติ</p>}
-            </div>
+        <div className="sheetSection">
+          <h2 className="ornamentTitle">สถานะผิดปกติ</h2>
+          <div className="stackList">
+            {conditions.length ? conditions.map((condition) => <div className="listRow warning" key={condition.id}><span>✧</span><div><strong>{condition.name}</strong><small>{condition.description || "ไม่มีรายละเอียด"}</small></div></div>) : <p className="emptyText">ไม่มีสถานะผิดปกติ</p>}
           </div>
         </div>
 
