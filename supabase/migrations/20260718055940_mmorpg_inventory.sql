@@ -1,5 +1,5 @@
--- MMORPG inventory: private owner/DM reads, DM-only management, equipment,
--- slot capacity, and private item artwork.
+-- MMORPG inventory: private owner/DM reads, owner item additions/equipment,
+-- DM-only editing/deletion/capacity, and private item artwork.
 
 begin;
 
@@ -236,6 +236,13 @@ begin
     raise exception 'Inventory items cannot be moved between characters';
   end if;
 
+  if new.image_path is not null and (
+    split_part(new.image_path, '/', 1) <> new.character_id::text
+    or split_part(new.image_path, '/', 2) <> new.id::text
+  ) then
+    raise exception 'Inventory image path must match its character and item';
+  end if;
+
   select capacity
   into capacity_limit
   from public.character_inventories
@@ -293,10 +300,10 @@ create trigger inventory_items_validate
 before insert or update on public.inventory_items
 for each row execute function private.validate_inventory_item();
 
-create or replace function public.equip_inventory_item(target_item_id uuid, target_slot text)
+create or replace function private.equip_inventory_item_checked(target_item_id uuid, target_slot text)
 returns void
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -304,18 +311,33 @@ declare
   target_category text;
   target_allowed_slot text;
 begin
-  select character_id, category, allowed_equipment_slot
-  into target_character, target_category, target_allowed_slot
+  select character_id
+  into target_character
   from public.inventory_items
-  where id = target_item_id
-  for update;
+  where id = target_item_id;
 
   if target_character is null then
     raise exception 'Inventory item not found';
   end if;
 
-  if not private.can_manage_character_inventory(target_character) then
-    raise exception 'Only the campaign DM can equip inventory items';
+  if not private.can_view_character_inventory(target_character) then
+    raise exception 'Only the character owner or campaign DM can equip inventory items';
+  end if;
+
+  perform 1
+  from public.character_inventories
+  where character_id = target_character
+  for update;
+
+  select category, allowed_equipment_slot
+  into target_category, target_allowed_slot
+  from public.inventory_items
+  where id = target_item_id
+    and character_id = target_character
+  for update;
+
+  if not found then
+    raise exception 'Inventory item not found';
   end if;
 
   if target_slot is null or not coalesce(
@@ -336,6 +358,18 @@ begin
   set equipment_slot = target_slot
   where id = target_item_id;
 end;
+$$;
+
+revoke all on function private.equip_inventory_item_checked(uuid, text) from public, anon, authenticated;
+grant execute on function private.equip_inventory_item_checked(uuid, text) to authenticated;
+
+create or replace function public.equip_inventory_item(target_item_id uuid, target_slot text)
+returns void
+language sql
+security invoker
+set search_path = ''
+as $$
+  select private.equip_inventory_item_checked(target_item_id, target_slot);
 $$;
 
 create or replace function public.resize_character_inventory(target_character_id uuid, target_capacity integer)
@@ -393,10 +427,10 @@ begin
 end;
 $$;
 
-create or replace function public.unequip_inventory_item(target_item_id uuid)
+create or replace function private.unequip_inventory_item_checked(target_item_id uuid)
 returns void
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -405,21 +439,47 @@ begin
   select character_id
   into target_character
   from public.inventory_items
-  where id = target_item_id
-  for update;
+  where id = target_item_id;
 
   if target_character is null then
     raise exception 'Inventory item not found';
   end if;
 
-  if not private.can_manage_character_inventory(target_character) then
-    raise exception 'Only the campaign DM can unequip inventory items';
+  if not private.can_view_character_inventory(target_character) then
+    raise exception 'Only the character owner or campaign DM can unequip inventory items';
+  end if;
+
+  perform 1
+  from public.character_inventories
+  where character_id = target_character
+  for update;
+
+  perform 1
+  from public.inventory_items
+  where id = target_item_id
+    and character_id = target_character
+  for update;
+
+  if not found then
+    raise exception 'Inventory item not found';
   end if;
 
   update public.inventory_items
   set equipment_slot = null
   where id = target_item_id;
 end;
+$$;
+
+revoke all on function private.unequip_inventory_item_checked(uuid) from public, anon, authenticated;
+grant execute on function private.unequip_inventory_item_checked(uuid) to authenticated;
+
+create or replace function public.unequip_inventory_item(target_item_id uuid)
+returns void
+language sql
+security invoker
+set search_path = ''
+as $$
+  select private.unequip_inventory_item_checked(target_item_id);
 $$;
 
 revoke all on function public.equip_inventory_item(uuid, text) from public, anon;
@@ -436,6 +496,10 @@ drop policy if exists "view permitted items" on public.inventory_items;
 drop policy if exists "edit permitted items insert" on public.inventory_items;
 drop policy if exists "edit permitted items update" on public.inventory_items;
 drop policy if exists "edit permitted items delete" on public.inventory_items;
+drop policy if exists "dm inserts inventory items" on public.inventory_items;
+drop policy if exists "owner and dm insert inventory items" on public.inventory_items;
+drop policy if exists "dm updates inventory items" on public.inventory_items;
+drop policy if exists "dm deletes inventory items" on public.inventory_items;
 drop policy if exists "owner and dm view inventory settings" on public.character_inventories;
 drop policy if exists "dm updates inventory settings" on public.character_inventories;
 
@@ -455,10 +519,16 @@ on public.inventory_items for select
 to authenticated
 using ((select private.can_view_character_inventory(character_id)));
 
-create policy "dm inserts inventory items"
+create policy "owner and dm insert inventory items"
 on public.inventory_items for insert
 to authenticated
-with check ((select private.can_manage_character_inventory(character_id)));
+with check (
+  (select private.can_manage_character_inventory(character_id))
+  or (
+    (select private.can_view_character_inventory(character_id))
+    and equipment_slot is null
+  )
+);
 
 create policy "dm updates inventory items"
 on public.inventory_items for update
@@ -495,8 +565,10 @@ set
 
 drop policy if exists "inventory images readable by owner and dm" on storage.objects;
 drop policy if exists "inventory images uploaded by dm" on storage.objects;
+drop policy if exists "inventory images uploaded by owner and dm" on storage.objects;
 drop policy if exists "inventory images updated by dm" on storage.objects;
 drop policy if exists "inventory images deleted by dm" on storage.objects;
+drop policy if exists "inventory images deleted by owner and dm" on storage.objects;
 
 create policy "inventory images readable by owner and dm"
 on storage.objects for select
@@ -506,12 +578,12 @@ using (
   and (select private.can_view_character_inventory(private.inventory_character_id_from_path(name)))
 );
 
-create policy "inventory images uploaded by dm"
+create policy "inventory images uploaded by owner and dm"
 on storage.objects for insert
 to authenticated
 with check (
   bucket_id = 'inventory-item-images'
-  and (select private.can_manage_character_inventory(private.inventory_character_id_from_path(name)))
+  and (select private.can_view_character_inventory(private.inventory_character_id_from_path(name)))
 );
 
 create policy "inventory images updated by dm"
@@ -526,12 +598,15 @@ with check (
   and (select private.can_manage_character_inventory(private.inventory_character_id_from_path(name)))
 );
 
-create policy "inventory images deleted by dm"
+create policy "inventory images deleted by owner and dm"
 on storage.objects for delete
 to authenticated
 using (
   bucket_id = 'inventory-item-images'
-  and (select private.can_manage_character_inventory(private.inventory_character_id_from_path(name)))
+  and (
+    (select private.can_manage_character_inventory(private.inventory_character_id_from_path(name)))
+    or owner_id = (select auth.uid())::text
+  )
 );
 
 do $$

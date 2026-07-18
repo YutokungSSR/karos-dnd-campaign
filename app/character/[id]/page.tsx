@@ -224,6 +224,7 @@ export default function CharacterPage() {
           items={items}
           capacity={inventoryCapacity}
           canManage={isDm}
+          canAddItems={character.owner_id === user?.id || isDm}
           databaseReady={inventoryReady}
           onChanged={load}
           onMessage={setMessage}
