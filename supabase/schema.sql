@@ -446,6 +446,7 @@ create policy "dm or self removes membership" on public.campaign_members for del
 create policy "dm changes roles" on public.campaign_members for update to authenticated using (public.is_campaign_dm(campaign_id)) with check (public.is_campaign_dm(campaign_id));
 
 create policy "view permitted characters" on public.characters for select to anon, authenticated using (public.can_view_character(id));
+create policy "owners view own characters directly" on public.characters for select to authenticated using ((select auth.uid()) is not null and owner_id = (select auth.uid()));
 create policy "create own character" on public.characters for insert to authenticated with check (owner_id = auth.uid() and (campaign_id is null or public.is_campaign_member(campaign_id)));
 create policy "owner or dm updates character" on public.characters for update to authenticated using (public.can_edit_character(id)) with check (owner_id = auth.uid() or (campaign_id is not null and public.is_campaign_dm(campaign_id)));
 create policy "owner or dm deletes character" on public.characters for delete to authenticated using (public.can_edit_character(id));

@@ -53,9 +53,10 @@ export default function CampaignPage() {
   async function createCharacter(event: FormEvent) {
     event.preventDefault();
     if (!user || !newCharacterName.trim()) return;
-    const { data, error } = await getSupabase().from("characters").insert({ owner_id: user.id, campaign_id: id, name: newCharacterName.trim() }).select("id").single();
+    const characterId = crypto.randomUUID();
+    const { error } = await getSupabase().from("characters").insert({ id: characterId, owner_id: user.id, campaign_id: id, name: newCharacterName.trim() });
     if (error) return setMessage(error.message);
-    window.location.href = `/character/${data.id}`;
+    window.location.href = `/character/${characterId}`;
   }
 
   async function changeHp(character: any, amount: number) {
