@@ -26,7 +26,9 @@ export default function CampaignPage() {
   const [message, setMessage] = useState("");
   const [newCharacterName, setNewCharacterName] = useState("");
   const [activeTab, setActiveTab] = useState<CampaignTab>("overview");
-  const [changingRoleUserId, setChangingRoleUserId] = useState<string | null>(null);
+  const [changingRoleUserId, setChangingRoleUserId] = useState<string | null>(
+    null
+  );
 
   const currentMember = useMemo(
     () => members.find((member) => member.user_id === user?.id),
@@ -37,7 +39,59 @@ export default function CampaignPage() {
     campaign?.dm_user_id === user?.id || currentMember?.role === "owner";
   const isDm = isOwner || currentMember?.role === "dm";
 
-  const load = useCallback(async () => {
+  const refreshRolls = useCallback(async () => {
+    if (!user || !id) return;
+
+    const { data, error } = await getSupabase()
+      .from("dice_rolls")
+      .select("*,profiles(display_name)")
+      .eq("campaign_id", id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setRolls(data ?? []);
+  }, [id, user]);
+
+  const refreshCharacters = useCallback(async () => {
+    if (!user || !id) return;
+
+    const { data, error } = await getSupabase()
+      .from("characters")
+      .select("*")
+      .eq("campaign_id", id)
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setCharacters(data ?? []);
+  }, [id, user]);
+
+  const refreshMembers = useCallback(async () => {
+    if (!user || !id) return;
+
+    const { data, error } = await getSupabase()
+      .from("campaign_members")
+      .select("user_id,role,joined_at,profiles(display_name,avatar_url)")
+      .eq("campaign_id", id)
+      .order("joined_at");
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setMembers(data ?? []);
+  }, [id, user]);
+
+  const loadInitialData = useCallback(async () => {
     if (!user || !id) return;
 
     setLoading(true);
@@ -66,8 +120,14 @@ export default function CampaignPage() {
           .limit(20),
       ]);
 
-    if (campaignResult.error) {
-      setMessage(campaignResult.error.message);
+    const firstError =
+      campaignResult.error ||
+      membersResult.error ||
+      charactersResult.error ||
+      rollsResult.error;
+
+    if (firstError) {
+      setMessage(firstError.message);
     }
 
     setCampaign(campaignResult.data);
@@ -78,8 +138,8 @@ export default function CampaignPage() {
   }, [id, user]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadInitialData();
+  }, [loadInitialData]);
 
   useEffect(() => {
     if (!id) return;
@@ -95,7 +155,7 @@ export default function CampaignPage() {
           table: "characters",
           filter: `campaign_id=eq.${id}`,
         },
-        () => load()
+        () => refreshCharacters()
       )
       .on(
         "postgres_changes",
@@ -105,7 +165,7 @@ export default function CampaignPage() {
           table: "dice_rolls",
           filter: `campaign_id=eq.${id}`,
         },
-        () => load()
+        () => refreshRolls()
       )
       .on(
         "postgres_changes",
@@ -115,14 +175,14 @@ export default function CampaignPage() {
           table: "campaign_members",
           filter: `campaign_id=eq.${id}`,
         },
-        () => load()
+        () => refreshMembers()
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id, load]);
+  }, [id, refreshCharacters, refreshMembers, refreshRolls]);
 
   useEffect(() => {
     if (!isDm && activeTab === "vault") setActiveTab("overview");
@@ -156,8 +216,12 @@ export default function CampaignPage() {
       .update({ current_hp: next })
       .eq("id", character.id);
 
-    if (error) setMessage(error.message);
-    else load();
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    await refreshCharacters();
   }
 
   async function copyInvite() {
@@ -200,7 +264,7 @@ export default function CampaignPage() {
           ? `แต่งตั้ง ${displayName} เป็น DM แล้ว`
           : `ถอดยศ DM ของ ${displayName} แล้ว`
       );
-      await load();
+      await refreshMembers();
     } finally {
       setChangingRoleUserId(null);
     }
@@ -404,7 +468,7 @@ export default function CampaignPage() {
               <DiceRoller
                 campaignId={id}
                 userId={user.id}
-                onRolled={load}
+                onRolled={refreshRolls}
               />
             ) : null}
 
@@ -494,7 +558,9 @@ export default function CampaignPage() {
                       </strong>
                       <span
                         className={`${styles.roleBadge} ${
-                          styles[`role_${memberIsOwner ? "owner" : member.role}`]
+                          styles[
+                            `role_${memberIsOwner ? "owner" : member.role}`
+                          ]
                         }`}
                       >
                         {memberIsOwner ? "Owner" : roleLabel(member.role)}
