@@ -1,0 +1,396 @@
+.vaultShell {
+  overflow: hidden;
+  border: 1px solid rgba(216,179,95,.48);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 12% 16%, rgba(115,75,28,.14), transparent 28%),
+    linear-gradient(145deg,rgba(28,19,13,.98),rgba(8,7,6,.99));
+  box-shadow: 0 30px 90px rgba(0,0,0,.48);
+}
+
+.vaultHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 24px;
+  border-bottom: 1px solid rgba(216,179,95,.2);
+  background: linear-gradient(90deg,rgba(216,179,95,.055),transparent);
+}
+
+.vaultHeader h2 {
+  margin: 4px 0;
+  color: #fff3d7;
+  font-family: Georgia,"Times New Roman",serif;
+  font-size: clamp(1.75rem,3vw,2.7rem);
+}
+
+.vaultHeader p:last-child {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px,1fr) minmax(170px,.35fr) auto auto;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(216,179,95,.16);
+  background: rgba(0,0,0,.18);
+}
+
+.managerPanel {
+  display: grid;
+  grid-template-columns: minmax(180px,.5fr) minmax(260px,1fr) minmax(260px,1.3fr);
+  gap: 14px;
+  align-items: start;
+  padding: 16px;
+  border-bottom: 1px solid rgba(216,179,95,.2);
+  background: rgba(216,179,95,.035);
+}
+
+.managerPanel h3 {
+  margin: 4px 0;
+}
+
+.manageList {
+  max-height: 180px;
+  display: grid;
+  gap: 6px;
+  overflow: auto;
+}
+
+.manageList > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 1px solid rgba(216,179,95,.15);
+  border-radius: 9px;
+  background: rgba(255,255,255,.025);
+}
+
+.vaultLayout {
+  display: grid;
+  grid-template-columns: 220px minmax(0,1fr) 340px;
+  min-height: 720px;
+}
+
+.folderPane,
+.galleryPane,
+.detailPane {
+  min-width: 0;
+}
+
+.folderPane {
+  padding: 15px;
+  border-right: 1px solid rgba(216,179,95,.17);
+  background: rgba(0,0,0,.16);
+}
+
+.paneTitle,
+.galleryHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+}
+
+.paneTitle span {
+  color: var(--gold-bright);
+  font-weight: 800;
+}
+
+.paneTitle small {
+  color: var(--muted);
+}
+
+.folderPane > button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+  padding: 9px 10px;
+  text-align: left;
+  color: #c9b796;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+}
+
+.folderPane > button:hover,
+.folderPane > button.activeFolder {
+  color: #fff1cf;
+  border-color: rgba(216,179,95,.28);
+  background: rgba(216,179,95,.08);
+}
+
+.folderPane b {
+  color: #88785f;
+  font-size: .72rem;
+}
+
+.galleryPane {
+  padding: 16px;
+}
+
+.galleryHeading h3 {
+  margin: 3px 0;
+  font-family: Georgia,"Times New Roman",serif;
+  font-size: 1.45rem;
+}
+
+.galleryHeading > span {
+  padding: 4px 9px;
+  color: var(--gold);
+  border: 1px solid rgba(216,179,95,.2);
+  border-radius: 999px;
+  font-size: .72rem;
+}
+
+.itemGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(150px,1fr));
+  gap: 10px;
+}
+
+.itemCard {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  border: 1px solid rgba(216,179,95,.17);
+  border-radius: 12px;
+  background: rgba(27,19,13,.82);
+  transition: .2s ease;
+}
+
+.itemCard:hover,
+.itemCard.selectedCard {
+  transform: translateY(-3px);
+  border-color: rgba(244,221,160,.65);
+  box-shadow: 0 15px 32px rgba(0,0,0,.35);
+}
+
+.itemImage {
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #75654d;
+  background:
+    radial-gradient(circle at center,rgba(216,179,95,.1),transparent 46%),
+    #0e0a08;
+}
+
+.itemImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.itemInfo {
+  display: grid;
+  gap: 7px;
+  padding: 9px;
+}
+
+.itemInfo strong {
+  overflow: hidden;
+  color: #f2e2c6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardCategories {
+  min-height: 19px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cardCategories span {
+  padding: 2px 5px;
+  color: #bca880;
+  border-radius: 999px;
+  background: rgba(216,179,95,.08);
+  font-size: .61rem;
+}
+
+.detailPane {
+  padding: 15px;
+  border-left: 1px solid rgba(216,179,95,.17);
+  background: rgba(0,0,0,.2);
+}
+
+.detailPreview {
+  aspect-ratio: 16 / 10;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  margin-bottom: 13px;
+  color: var(--muted);
+  border: 1px solid rgba(216,179,95,.22);
+  border-radius: 12px;
+  background: #0d0907;
+}
+
+.detailPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.detailForm {
+  display: grid;
+  gap: 10px;
+}
+
+.detailForm > label {
+  display: grid;
+  gap: 5px;
+  color: #d8c7a9;
+  font-size: .79rem;
+  font-weight: 800;
+}
+
+.detailForm fieldset {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(216,179,95,.18);
+  border-radius: 10px;
+}
+
+.detailForm legend {
+  padding: 0 6px;
+  color: var(--gold);
+  font-size: .75rem;
+}
+
+.categoryChecks {
+  max-height: 150px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  overflow: auto;
+}
+
+.categoryChecks label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #c8b899;
+  font-size: .72rem;
+}
+
+.categoryChecks input {
+  width: auto;
+}
+
+.fileMeta {
+  display: grid;
+  gap: 3px;
+  color: #887b66;
+  font-size: .69rem;
+}
+
+.detailEmpty,
+.emptyState {
+  min-height: 280px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  color: var(--muted);
+}
+
+.detailEmpty span {
+  color: var(--gold);
+  font-size: 4rem;
+}
+
+.detailEmpty strong {
+  color: #e8d8bb;
+}
+
+.detailEmpty p {
+  max-width: 240px;
+  line-height: 1.6;
+}
+
+@media (max-width: 1120px) {
+  .vaultLayout {
+    grid-template-columns: 190px minmax(0,1fr);
+  }
+
+  .detailPane {
+    grid-column: 1 / -1;
+    border-top: 1px solid rgba(216,179,95,.17);
+    border-left: 0;
+  }
+
+  .detailPane:has(.detailForm) {
+    display: grid;
+    grid-template-columns: minmax(250px,.7fr) minmax(320px,1fr);
+    gap: 15px;
+  }
+}
+
+@media (max-width: 780px) {
+  .vaultHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .headerActions {
+    justify-content: stretch;
+  }
+
+  .headerActions button {
+    flex: 1;
+  }
+
+  .toolbar,
+  .managerPanel,
+  .vaultLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .folderPane {
+    border-right: 0;
+    border-bottom: 1px solid rgba(216,179,95,.17);
+  }
+
+  .folderPane {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .paneTitle {
+    width: 100%;
+  }
+
+  .folderPane > button {
+    width: auto;
+    margin: 0;
+  }
+
+  .detailPane:has(.detailForm) {
+    display: block;
+  }
+
+  .detailPreview {
+    margin-bottom: 13px;
+  }
+}
