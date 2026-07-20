@@ -36,6 +36,9 @@ type SoundRequest = {
 
 const ENABLED_KEY = "karos.ui-sound.enabled";
 const VOLUME_KEY = "karos.ui-sound.volume";
+const MASTER_VOLUME_BOOST = 1.72;
+const UI_CHANNEL_BOOST = 1.22;
+const DICE_CHANNEL_BOOST = 1.58;
 const INTERACTIVE_SELECTOR = [
   "button",
   "a[href]",
@@ -158,7 +161,7 @@ function createReverbImpulse(context: AudioContext) {
 
 export default function UiSoundSystem() {
   const [enabled, setEnabled] = useState(true);
-  const [volume, setVolume] = useState(0.34);
+  const [volume, setVolume] = useState(0.5);
   const [panelOpen, setPanelOpen] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
 
@@ -180,7 +183,11 @@ export default function UiSoundSystem() {
     volumeRef.current = volume;
     const master = masterGainRef.current;
     if (master) {
-      master.gain.setTargetAtTime(enabled ? volume : 0, master.context.currentTime, 0.02);
+      master.gain.setTargetAtTime(
+        enabled ? volume * MASTER_VOLUME_BOOST : 0,
+        master.context.currentTime,
+        0.02
+      );
     }
   }, [enabled, volume]);
 
@@ -207,17 +214,19 @@ export default function UiSoundSystem() {
       const reverbReturn = context.createGain();
       const compressor = context.createDynamicsCompressor();
 
-      master.gain.value = enabledRef.current ? volumeRef.current : 0;
-      dry.gain.value = 0.92;
+      master.gain.value = enabledRef.current
+        ? volumeRef.current * MASTER_VOLUME_BOOST
+        : 0;
+      dry.gain.value = 1.08;
       reverbInput.gain.value = 1;
-      reverbReturn.gain.value = 0.22;
+      reverbReturn.gain.value = 0.3;
       convolver.buffer = createReverbImpulse(context);
 
-      compressor.threshold.value = -24;
-      compressor.knee.value = 18;
-      compressor.ratio.value = 2.2;
-      compressor.attack.value = 0.008;
-      compressor.release.value = 0.22;
+      compressor.threshold.value = -20;
+      compressor.knee.value = 16;
+      compressor.ratio.value = 3.6;
+      compressor.attack.value = 0.004;
+      compressor.release.value = 0.18;
 
       dry.connect(master);
       reverbInput.connect(convolver);
@@ -259,8 +268,8 @@ export default function UiSoundSystem() {
 
     const dryBus = context.createGain();
     const wetBus = context.createGain();
-    dryBus.gain.value = 1;
-    wetBus.gain.value = 1;
+    dryBus.gain.value = 1.34;
+    wetBus.gain.value = 1.18;
     dryBus.connect(dry);
     wetBus.connect(reverbInput);
     diceDryBusRef.current = dryBus;
@@ -293,6 +302,9 @@ export default function UiSoundSystem() {
 
       const now = context.currentTime + (options.start ?? 0);
       const attack = options.attack ?? 0.014;
+      const channelBoost = options.channel === "dice"
+        ? DICE_CHANNEL_BOOST
+        : UI_CHANNEL_BOOST;
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       const panner = context.createStereoPanner();
@@ -312,7 +324,7 @@ export default function UiSoundSystem() {
 
       gain.gain.setValueAtTime(0.0001, now);
       gain.gain.exponentialRampToValueAtTime(
-        Math.max(0.0002, options.gain),
+        Math.max(0.0002, options.gain * channelBoost),
         now + attack
       );
       gain.gain.exponentialRampToValueAtTime(0.0001, now + options.duration);
@@ -355,6 +367,9 @@ export default function UiSoundSystem() {
       if (!dry || !reverbInput) return;
 
       const now = context.currentTime + (options.start ?? 0);
+      const channelBoost = options.channel === "dice"
+        ? DICE_CHANNEL_BOOST
+        : UI_CHANNEL_BOOST;
       const source = context.createBufferSource();
       const filter = context.createBiquadFilter();
       const gain = context.createGain();
@@ -376,7 +391,7 @@ export default function UiSoundSystem() {
 
       gain.gain.setValueAtTime(0.0001, now);
       gain.gain.exponentialRampToValueAtTime(
-        Math.max(0.0002, options.gain),
+        Math.max(0.0002, options.gain * channelBoost),
         now + (options.attack ?? 0.022)
       );
       gain.gain.exponentialRampToValueAtTime(0.0001, now + options.duration);
@@ -1019,7 +1034,7 @@ export default function UiSoundSystem() {
           <label className={styles.toggleRow}>
             <span>
               <strong>{enabled ? "เปิดเสียง UI" : "ปิดเสียง UI"}</strong>
-              <small>ประกายเวท คริสตัล และพาร์ชเมนต์แบบนุ่ม</small>
+              <small>ประกายเวท คริสตัล และเสียงทอยแบบ Cinematic ที่ชัดขึ้น</small>
             </span>
             <input
               type="checkbox"
