@@ -82,6 +82,24 @@ function randomInt(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+type DiceSoundKind = "dice-charge" | "dice-tick" | "dice-reveal" | "dice-stop";
+
+type DiceSoundDetail = {
+  progress?: number;
+  durationMs?: number;
+  tier?: GlowTier;
+  meteor?: boolean;
+  tick?: number;
+};
+
+function emitDiceSound(kind: DiceSoundKind, detail: DiceSoundDetail = {}) {
+  window.dispatchEvent(
+    new CustomEvent("karos-ui-sound", {
+      detail: { kind, ...detail },
+    })
+  );
+}
+
 function getDifferentRandom(current: number | null, max: number) {
   if (max <= 1) return 1;
   let next = randomInt(1, max);
@@ -130,6 +148,7 @@ export default function DiceRoller({
 
   function runTicker(max: number, revealDelayMs: number) {
     const startedAt = Date.now();
+    let tickIndex = 0;
 
     const tick = () => {
       setDisplayValue((current) => getDifferentRandom(current, max));
@@ -137,6 +156,12 @@ export default function DiceRoller({
 
       const elapsed = Date.now() - startedAt;
       const progress = Math.min(elapsed / revealDelayMs, 1);
+      const soundEvery = progress < 0.58 ? 2 : 1;
+      if (tickIndex % soundEvery === 0) {
+        emitDiceSound("dice-tick", { progress, tick: tickIndex });
+      }
+      tickIndex += 1;
+
       const nextDelay = progress < 0.55 ? 68 : progress < 0.82 ? 92 : 128;
       tickerTimer.current = setTimeout(tick, nextDelay);
     };
@@ -146,6 +171,7 @@ export default function DiceRoller({
 
   function hideAnimatedRoll() {
     clearAnimationTimers();
+    emitDiceSound("dice-stop");
     setAnimatedRoll(null);
     setDisplayValue(null);
     setIsResultRevealed(false);
@@ -164,6 +190,7 @@ export default function DiceRoller({
     const totalDurationMs = effect.meteor ? 7000 : 5200;
 
     clearAnimationTimers();
+    emitDiceSound("dice-stop");
 
     setAnimatedRoll({
       id: record.id,
@@ -182,6 +209,11 @@ export default function DiceRoller({
     setPhaseText(effect.meteor ? "ดาวตกกำลังขีดชะตา..." : "ชะตากำลังหมุนวน...");
     setTickerSeed((seed) => seed + 1);
 
+    emitDiceSound("dice-charge", {
+      durationMs: revealDelayMs,
+      tier: effect.tier,
+      meteor: effect.meteor,
+    });
     runTicker(tickerMax, revealDelayMs);
 
     revealTimer.current = setTimeout(() => {
@@ -190,6 +222,10 @@ export default function DiceRoller({
       setDisplayValue(record.result);
       setIsResultRevealed(true);
       setPhaseText(effect.meteor ? "พรจากฟากฟ้าตอบรับแล้ว" : "ผลลัพธ์ปรากฏแล้ว");
+      emitDiceSound("dice-reveal", {
+        tier: effect.tier,
+        meteor: effect.meteor,
+      });
     }, revealDelayMs);
 
     hideTimer.current = setTimeout(() => {
@@ -227,6 +263,7 @@ export default function DiceRoller({
 
     return () => {
       clearAnimationTimers();
+      emitDiceSound("dice-stop");
       supabase.removeChannel(channel);
     };
   }, [campaignId]);
@@ -286,7 +323,12 @@ export default function DiceRoller({
             placeholder="1d20+5"
             aria-label="สูตรลูกเต๋า"
           />
-          <button className="button" onClick={roll} disabled={rolling}>
+          <button
+            className="button"
+            onClick={roll}
+            disabled={rolling}
+            data-ui-sound="off"
+          >
             {rolling ? "กำลังทอย…" : "ทอย"}
           </button>
         </div>
