@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import LiveSceneStage from "@/components/LiveSceneStage";
 import { rollDice } from "@/lib/dice";
 import { getSupabase } from "@/lib/supabase";
 import styles from "./DiceRoller.module.css";
@@ -202,6 +203,8 @@ export default function DiceRoller({
 
   return (
     <>
+      <LiveSceneStage campaignId={campaignId} userId={userId} />
+
       <section className="panel dicePanel">
         <div className="panelTitleRow">
           <div>
