@@ -9,6 +9,9 @@ import {
 } from "react";
 import styles from "./UiSoundSystem.module.css";
 
+type DiceSoundTier = "white" | "green" | "blue" | "red" | "gold" | "rainbow";
+type SoundChannel = "ui" | "dice";
+
 type SoundKind =
   | "hover"
   | "click"
@@ -16,10 +19,19 @@ type SoundKind =
   | "open"
   | "close"
   | "success"
-  | "warning";
+  | "warning"
+  | "dice-charge"
+  | "dice-tick"
+  | "dice-reveal"
+  | "dice-stop";
 
 type SoundRequest = {
   kind?: SoundKind;
+  progress?: number;
+  durationMs?: number;
+  tier?: DiceSoundTier;
+  meteor?: boolean;
+  tick?: number;
 };
 
 const ENABLED_KEY = "karos.ui-sound.enabled";
@@ -154,6 +166,8 @@ export default function UiSoundSystem() {
   const masterGainRef = useRef<GainNode | null>(null);
   const dryGainRef = useRef<GainNode | null>(null);
   const reverbInputRef = useRef<GainNode | null>(null);
+  const diceDryBusRef = useRef<GainNode | null>(null);
+  const diceWetBusRef = useRef<GainNode | null>(null);
   const enabledRef = useRef(enabled);
   const volumeRef = useRef(volume);
   const lastGlobalHoverRef = useRef(0);
@@ -224,6 +238,35 @@ export default function UiSoundSystem() {
     return context;
   }, []);
 
+  const fadeDiceBus = useCallback((context: AudioContext, duration = 0.16) => {
+    const now = context.currentTime;
+    const buses = [diceDryBusRef.current, diceWetBusRef.current];
+
+    for (const bus of buses) {
+      if (!bus) continue;
+      bus.gain.cancelScheduledValues(now);
+      bus.gain.setValueAtTime(Math.max(0.0001, bus.gain.value), now);
+      bus.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    }
+  }, []);
+
+  const resetDiceBus = useCallback((context: AudioContext) => {
+    fadeDiceBus(context, 0.09);
+
+    const dry = dryGainRef.current;
+    const reverbInput = reverbInputRef.current;
+    if (!dry || !reverbInput) return;
+
+    const dryBus = context.createGain();
+    const wetBus = context.createGain();
+    dryBus.gain.value = 1;
+    wetBus.gain.value = 1;
+    dryBus.connect(dry);
+    wetBus.connect(reverbInput);
+    diceDryBusRef.current = dryBus;
+    diceWetBusRef.current = wetBus;
+  }, [fadeDiceBus]);
+
   const connectTone = useCallback(
     (
       context: AudioContext,
@@ -237,10 +280,15 @@ export default function UiSoundSystem() {
         attack?: number;
         pan?: number;
         reverb?: number;
+        channel?: SoundChannel;
       }
     ) => {
-      const dry = dryGainRef.current;
-      const reverbInput = reverbInputRef.current;
+      const dry = options.channel === "dice"
+        ? diceDryBusRef.current ?? dryGainRef.current
+        : dryGainRef.current;
+      const reverbInput = options.channel === "dice"
+        ? diceWetBusRef.current ?? reverbInputRef.current
+        : reverbInputRef.current;
       if (!dry || !reverbInput) return;
 
       const now = context.currentTime + (options.start ?? 0);
@@ -286,6 +334,7 @@ export default function UiSoundSystem() {
       context: AudioContext,
       options: {
         frequency: number;
+        endFrequency?: number;
         gain: number;
         duration: number;
         start?: number;
@@ -294,10 +343,15 @@ export default function UiSoundSystem() {
         pan?: number;
         reverb?: number;
         attack?: number;
+        channel?: SoundChannel;
       }
     ) => {
-      const dry = dryGainRef.current;
-      const reverbInput = reverbInputRef.current;
+      const dry = options.channel === "dice"
+        ? diceDryBusRef.current ?? dryGainRef.current
+        : dryGainRef.current;
+      const reverbInput = options.channel === "dice"
+        ? diceWetBusRef.current ?? reverbInputRef.current
+        : reverbInputRef.current;
       if (!dry || !reverbInput) return;
 
       const now = context.currentTime + (options.start ?? 0);
@@ -309,7 +363,13 @@ export default function UiSoundSystem() {
 
       source.buffer = createNoiseBuffer(context, options.duration);
       filter.type = options.type ?? "bandpass";
-      filter.frequency.value = options.frequency;
+      filter.frequency.setValueAtTime(options.frequency, now);
+      if (options.endFrequency) {
+        filter.frequency.exponentialRampToValueAtTime(
+          Math.max(40, options.endFrequency),
+          now + options.duration
+        );
+      }
       filter.Q.value = options.q ?? 0.55;
       panner.pan.value = clamp(options.pan ?? 0, -1, 1);
       reverbSend.gain.value = clamp(options.reverb ?? 0.28, 0, 1);
@@ -335,7 +395,13 @@ export default function UiSoundSystem() {
   );
 
   const playSound = useCallback(
-    async (kind: SoundKind, force = false) => {
+    async (kind: SoundKind, force = false, request: SoundRequest = {}) => {
+      if (kind === "dice-stop") {
+        const context = contextRef.current;
+        if (context) fadeDiceBus(context, 0.22);
+        return;
+      }
+
       if (!force && !enabledRef.current) return;
       const context = await ensureContext();
       if (context.state !== "running") return;
@@ -343,6 +409,285 @@ export default function UiSoundSystem() {
       const drift = 1 + (Math.random() - 0.5) * 0.018;
       const soft = 0.8 + Math.random() * 0.12;
       const panDrift = (Math.random() - 0.5) * 0.24;
+
+      if (kind === "dice-charge") {
+        resetDiceBus(context);
+        const duration = clamp((request.durationMs ?? 2600) / 1000, 1.6, 4.2);
+        const meteor = Boolean(request.meteor);
+
+        connectTone(context, {
+          type: "sine",
+          frequency: meteor ? 55 : 82.41,
+          endFrequency: meteor ? 86 : 130.81,
+          gain: meteor ? 0.034 : 0.028,
+          duration,
+          attack: 0.24,
+          pan: -0.08,
+          reverb: 0.22,
+          channel: "dice",
+        });
+        connectTone(context, {
+          type: "triangle",
+          frequency: meteor ? 110 : 164.81,
+          endFrequency: meteor ? 196 : 261.63,
+          gain: meteor ? 0.019 : 0.015,
+          duration: Math.max(1.2, duration - 0.08),
+          start: 0.025,
+          attack: 0.3,
+          pan: 0.1,
+          reverb: 0.36,
+          channel: "dice",
+        });
+        connectNoise(context, {
+          frequency: meteor ? 180 : 320,
+          endFrequency: meteor ? 5200 : 3100,
+          gain: meteor ? 0.032 : 0.021,
+          duration,
+          type: "bandpass",
+          q: meteor ? 0.3 : 0.42,
+          pan: 0,
+          reverb: 0.48,
+          attack: 0.34,
+          channel: "dice",
+        });
+
+        const runeNotes = meteor
+          ? [220, 329.63, 493.88, 739.99]
+          : [392, 523.25, 659.25, 783.99];
+        runeNotes.forEach((frequency, index) => {
+          const start = 0.22 + index * Math.min(0.46, duration * 0.14);
+          connectTone(context, {
+            frequency: frequency * drift,
+            endFrequency: frequency * 1.018 * drift,
+            gain: (0.009 + index * 0.0012) * soft,
+            duration: 0.56 + index * 0.07,
+            start,
+            attack: 0.025,
+            pan: -0.34 + index * 0.22,
+            reverb: 0.72,
+            channel: "dice",
+          });
+        });
+
+        const pulseStarts = [0.3, 0.52, 0.7, 0.84].map(
+          (ratio) => Math.min(duration - 0.2, duration * ratio)
+        );
+        pulseStarts.forEach((start, index) => {
+          connectTone(context, {
+            frequency: (meteor ? 72 : 96) + index * 3,
+            endFrequency: meteor ? 38 : 58,
+            gain: (meteor ? 0.025 : 0.018) * (0.82 + index * 0.07),
+            duration: 0.2,
+            start,
+            attack: 0.012,
+            pan: index % 2 === 0 ? -0.08 : 0.08,
+            reverb: 0.12,
+            channel: "dice",
+          });
+        });
+
+        const tensionStart = Math.max(0.45, duration - 0.86);
+        connectTone(context, {
+          type: "triangle",
+          frequency: meteor ? 174.61 : 220,
+          endFrequency: meteor ? 523.25 : 659.25,
+          gain: meteor ? 0.012 : 0.009,
+          duration: Math.min(0.84, duration - tensionStart + 0.02),
+          start: tensionStart,
+          attack: 0.24,
+          pan: 0,
+          reverb: 0.32,
+          channel: "dice",
+        });
+        connectNoise(context, {
+          frequency: 2100,
+          endFrequency: 7200,
+          gain: meteor ? 0.018 : 0.011,
+          duration: Math.min(0.8, duration - tensionStart + 0.02),
+          start: tensionStart,
+          type: "highpass",
+          q: 0.24,
+          pan: 0,
+          reverb: 0.5,
+          attack: 0.28,
+          channel: "dice",
+        });
+
+        if (meteor) {
+          connectNoise(context, {
+            frequency: 460,
+            endFrequency: 6800,
+            gain: 0.038,
+            duration: 1.72,
+            start: 0.46,
+            type: "bandpass",
+            q: 0.24,
+            pan: -0.42,
+            reverb: 0.58,
+            attack: 0.18,
+            channel: "dice",
+          });
+          const impactStart = Math.min(2.15, Math.max(1.25, duration - 1.15));
+          connectTone(context, {
+            frequency: 76,
+            endFrequency: 34,
+            gain: 0.058,
+            duration: 0.82,
+            start: impactStart,
+            attack: 0.012,
+            pan: 0,
+            reverb: 0.18,
+            channel: "dice",
+          });
+          connectNoise(context, {
+            frequency: 760,
+            endFrequency: 130,
+            gain: 0.036,
+            duration: 0.52,
+            start: impactStart,
+            type: "lowpass",
+            q: 0.5,
+            pan: 0,
+            reverb: 0.32,
+            attack: 0.008,
+            channel: "dice",
+          });
+        }
+        return;
+      }
+
+      if (kind === "dice-tick") {
+        const progress = clamp(request.progress ?? 0, 0, 1);
+        const tick = request.tick ?? 0;
+        const pitch = 520 + progress * 920 + (tick % 4) * 32;
+        const pan = (tick % 2 === 0 ? -0.22 : 0.22) + panDrift * 0.35;
+
+        connectTone(context, {
+          frequency: pitch * drift,
+          endFrequency: pitch * (1.035 + progress * 0.025) * drift,
+          gain: (0.0048 + progress * 0.0042) * soft,
+          duration: 0.065 + progress * 0.018,
+          attack: 0.004,
+          pan,
+          reverb: 0.48,
+          channel: "dice",
+        });
+        if (progress > 0.68 && tick % 3 === 0) {
+          connectTone(context, {
+            frequency: pitch * 1.5 * drift,
+            endFrequency: pitch * 1.58 * drift,
+            gain: 0.0028 * soft,
+            duration: 0.12,
+            attack: 0.006,
+            pan: -pan,
+            reverb: 0.7,
+            channel: "dice",
+          });
+        }
+        return;
+      }
+
+      if (kind === "dice-reveal") {
+        resetDiceBus(context);
+        const tier = request.tier ?? "white";
+        const meteor = Boolean(request.meteor);
+        const intensity = {
+          white: 0.82,
+          green: 0.88,
+          blue: 0.96,
+          red: 1.02,
+          gold: 1.14,
+          rainbow: 1.28,
+        }[tier];
+        const chords: Record<DiceSoundTier, number[]> = {
+          white: [392, 523.25, 659.25],
+          green: [392, 493.88, 659.25],
+          blue: [440, 587.33, 783.99],
+          red: [293.66, 440, 587.33],
+          gold: [523.25, 659.25, 783.99, 1046.5],
+          rainbow: [523.25, 659.25, 783.99, 987.77, 1318.51],
+        };
+
+        connectTone(context, {
+          frequency: meteor ? 54 : 108,
+          endFrequency: meteor ? 27 : 43,
+          gain: (meteor ? 0.072 : 0.052) * intensity,
+          duration: meteor ? 1.2 : 0.82,
+          attack: 0.008,
+          pan: 0,
+          reverb: 0.16,
+          channel: "dice",
+        });
+        connectNoise(context, {
+          frequency: meteor ? 1100 : 820,
+          endFrequency: meteor ? 120 : 190,
+          gain: (meteor ? 0.048 : 0.029) * intensity,
+          duration: meteor ? 0.78 : 0.48,
+          type: "lowpass",
+          q: 0.42,
+          pan: 0,
+          reverb: 0.28,
+          attack: 0.006,
+          channel: "dice",
+        });
+
+        chords[tier].forEach((frequency, index, notes) => {
+          connectTone(context, {
+            frequency: frequency * drift,
+            endFrequency: frequency * (tier === "red" ? 0.99 : 1.012) * drift,
+            gain: Math.max(0.008, (0.024 - index * 0.0025) * intensity),
+            duration: 0.86 + index * 0.14,
+            start: index * (tier === "rainbow" ? 0.055 : 0.075),
+            attack: 0.012 + index * 0.004,
+            pan: notes.length === 1 ? 0 : -0.42 + (index / (notes.length - 1)) * 0.84,
+            reverb: tier === "rainbow" ? 0.88 : 0.72,
+            channel: "dice",
+          });
+        });
+
+        connectTone(context, {
+          frequency: tier === "rainbow" ? 2093 : 1567.98,
+          endFrequency: tier === "rainbow" ? 2349.32 : 1760,
+          gain: 0.0085 * intensity,
+          duration: meteor ? 1.9 : 1.35,
+          start: 0.14,
+          attack: 0.025,
+          pan: 0.28,
+          reverb: 0.94,
+          channel: "dice",
+        });
+
+        if (tier === "gold" || tier === "rainbow" || meteor) {
+          connectNoise(context, {
+            frequency: 3600,
+            endFrequency: 9400,
+            gain: (tier === "rainbow" ? 0.019 : 0.012) * intensity,
+            duration: meteor ? 1.7 : 1.15,
+            start: 0.08,
+            type: "highpass",
+            q: 0.22,
+            pan: -0.12,
+            reverb: 0.9,
+            attack: 0.18,
+            channel: "dice",
+          });
+        }
+
+        const revealBuses = [diceDryBusRef.current, diceWetBusRef.current];
+        window.setTimeout(() => {
+          const now = context.currentTime;
+          for (const bus of revealBuses) {
+            if (!bus) continue;
+            bus.gain.cancelScheduledValues(now);
+            bus.gain.setValueAtTime(Math.max(0.0001, bus.gain.value), now);
+            bus.gain.exponentialRampToValueAtTime(
+              0.0001,
+              now + (meteor ? 1.2 : 0.82)
+            );
+          }
+        }, meteor ? 2900 : 2200);
+        return;
+      }
 
       if (kind === "hover") {
         connectTone(context, {
@@ -506,7 +851,7 @@ export default function UiSoundSystem() {
         reverb: 0.65,
       });
     },
-    [connectNoise, connectTone, ensureContext]
+    [connectNoise, connectTone, ensureContext, fadeDiceBus, resetDiceBus]
   );
 
   useEffect(() => {
@@ -587,7 +932,7 @@ export default function UiSoundSystem() {
   useEffect(() => {
     const onCustomSound = (event: Event) => {
       const detail = (event as CustomEvent<SoundRequest>).detail;
-      if (detail?.kind) void playSound(detail.kind);
+      if (detail?.kind) void playSound(detail.kind, false, detail);
     };
     window.addEventListener("karos-ui-sound", onCustomSound);
     return () => window.removeEventListener("karos-ui-sound", onCustomSound);
@@ -621,6 +966,9 @@ export default function UiSoundSystem() {
 
   function changeEnabled(nextEnabled: boolean) {
     setEnabled(nextEnabled);
+    if (!nextEnabled && contextRef.current) {
+      fadeDiceBus(contextRef.current, 0.08);
+    }
     try {
       window.localStorage.setItem(ENABLED_KEY, String(nextEnabled));
     } catch {
@@ -724,7 +1072,7 @@ export default function UiSoundSystem() {
           </div>
 
           <p className={styles.detailText}>
-            โทนเสียงเวทคริสตัลแบบนุ่ม ไม่มีเสียงเคาะโลหะหรือเสียงกระแทกแข็ง
+            โทนเสียงเวทคริสตัลแบบนุ่ม พร้อมเสียงทอย Cinematic ที่ซิงก์กับการสุ่ม
           </p>
         </section>
       ) : null}
