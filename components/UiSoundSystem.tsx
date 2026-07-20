@@ -118,9 +118,29 @@ function createNoiseBuffer(context: AudioContext, duration: number) {
   const buffer = context.createBuffer(1, frameCount, context.sampleRate);
   const data = buffer.getChannelData(0);
   for (let index = 0; index < frameCount; index += 1) {
-    const envelope = 1 - index / frameCount;
+    const progress = index / frameCount;
+    const envelope = Math.sin(Math.PI * Math.min(1, progress * 1.6)) *
+      Math.pow(1 - progress, 1.45);
     data[index] = (Math.random() * 2 - 1) * envelope;
   }
+  return buffer;
+}
+
+function createReverbImpulse(context: AudioContext) {
+  const duration = 1.45;
+  const frameCount = Math.floor(context.sampleRate * duration);
+  const buffer = context.createBuffer(2, frameCount, context.sampleRate);
+
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const data = buffer.getChannelData(channel);
+    for (let index = 0; index < frameCount; index += 1) {
+      const progress = index / frameCount;
+      const shimmer = Math.sin(index * (0.017 + channel * 0.003)) * 0.18;
+      data[index] =
+        (Math.random() * 2 - 1 + shimmer) * Math.pow(1 - progress, 3.4);
+    }
+  }
+
   return buffer;
 }
 
@@ -132,6 +152,8 @@ export default function UiSoundSystem() {
 
   const contextRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
+  const dryGainRef = useRef<GainNode | null>(null);
+  const reverbInputRef = useRef<GainNode | null>(null);
   const enabledRef = useRef(enabled);
   const volumeRef = useRef(volume);
   const lastGlobalHoverRef = useRef(0);
@@ -165,10 +187,35 @@ export default function UiSoundSystem() {
     if (!contextRef.current) {
       const context = new AudioContext({ latencyHint: "interactive" });
       const master = context.createGain();
+      const dry = context.createGain();
+      const reverbInput = context.createGain();
+      const convolver = context.createConvolver();
+      const reverbReturn = context.createGain();
+      const compressor = context.createDynamicsCompressor();
+
       master.gain.value = enabledRef.current ? volumeRef.current : 0;
-      master.connect(context.destination);
+      dry.gain.value = 0.92;
+      reverbInput.gain.value = 1;
+      reverbReturn.gain.value = 0.22;
+      convolver.buffer = createReverbImpulse(context);
+
+      compressor.threshold.value = -24;
+      compressor.knee.value = 18;
+      compressor.ratio.value = 2.2;
+      compressor.attack.value = 0.008;
+      compressor.release.value = 0.22;
+
+      dry.connect(master);
+      reverbInput.connect(convolver);
+      convolver.connect(reverbReturn);
+      reverbReturn.connect(master);
+      master.connect(compressor);
+      compressor.connect(context.destination);
+
       contextRef.current = context;
       masterGainRef.current = master;
+      dryGainRef.current = dry;
+      reverbInputRef.current = reverbInput;
     }
 
     const context = contextRef.current;
@@ -188,32 +235,48 @@ export default function UiSoundSystem() {
         duration: number;
         start?: number;
         attack?: number;
+        pan?: number;
+        reverb?: number;
       }
     ) => {
-      const master = masterGainRef.current;
-      if (!master) return;
+      const dry = dryGainRef.current;
+      const reverbInput = reverbInputRef.current;
+      if (!dry || !reverbInput) return;
+
       const now = context.currentTime + (options.start ?? 0);
-      const attack = options.attack ?? 0.008;
+      const attack = options.attack ?? 0.014;
       const oscillator = context.createOscillator();
       const gain = context.createGain();
+      const panner = context.createStereoPanner();
+      const reverbSend = context.createGain();
+
       oscillator.type = options.type ?? "sine";
       oscillator.frequency.setValueAtTime(options.frequency, now);
       if (options.endFrequency) {
         oscillator.frequency.exponentialRampToValueAtTime(
-          Math.max(20, options.endFrequency),
+          Math.max(40, options.endFrequency),
           now + options.duration
         );
       }
+
+      panner.pan.value = clamp(options.pan ?? 0, -1, 1);
+      reverbSend.gain.value = clamp(options.reverb ?? 0.38, 0, 1);
+
       gain.gain.setValueAtTime(0.0001, now);
       gain.gain.exponentialRampToValueAtTime(
         Math.max(0.0002, options.gain),
         now + attack
       );
       gain.gain.exponentialRampToValueAtTime(0.0001, now + options.duration);
+
       oscillator.connect(gain);
-      gain.connect(master);
+      gain.connect(panner);
+      panner.connect(dry);
+      panner.connect(reverbSend);
+      reverbSend.connect(reverbInput);
+
       oscillator.start(now);
-      oscillator.stop(now + options.duration + 0.03);
+      oscillator.stop(now + options.duration + 0.05);
     },
     []
   );
@@ -228,26 +291,45 @@ export default function UiSoundSystem() {
         start?: number;
         type?: BiquadFilterType;
         q?: number;
+        pan?: number;
+        reverb?: number;
+        attack?: number;
       }
     ) => {
-      const master = masterGainRef.current;
-      if (!master) return;
+      const dry = dryGainRef.current;
+      const reverbInput = reverbInputRef.current;
+      if (!dry || !reverbInput) return;
+
       const now = context.currentTime + (options.start ?? 0);
       const source = context.createBufferSource();
       const filter = context.createBiquadFilter();
       const gain = context.createGain();
+      const panner = context.createStereoPanner();
+      const reverbSend = context.createGain();
+
       source.buffer = createNoiseBuffer(context, options.duration);
       filter.type = options.type ?? "bandpass";
       filter.frequency.value = options.frequency;
-      filter.Q.value = options.q ?? 0.8;
+      filter.Q.value = options.q ?? 0.55;
+      panner.pan.value = clamp(options.pan ?? 0, -1, 1);
+      reverbSend.gain.value = clamp(options.reverb ?? 0.28, 0, 1);
+
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(options.gain, now + 0.006);
+      gain.gain.exponentialRampToValueAtTime(
+        Math.max(0.0002, options.gain),
+        now + (options.attack ?? 0.022)
+      );
       gain.gain.exponentialRampToValueAtTime(0.0001, now + options.duration);
+
       source.connect(filter);
       filter.connect(gain);
-      gain.connect(master);
+      gain.connect(panner);
+      panner.connect(dry);
+      panner.connect(reverbSend);
+      reverbSend.connect(reverbInput);
+
       source.start(now);
-      source.stop(now + options.duration + 0.02);
+      source.stop(now + options.duration + 0.04);
     },
     []
   );
@@ -257,153 +339,171 @@ export default function UiSoundSystem() {
       if (!force && !enabledRef.current) return;
       const context = await ensureContext();
       if (context.state !== "running") return;
-      const drift = 1 + (Math.random() - 0.5) * 0.035;
-      const soft = 0.72 + Math.random() * 0.18;
+
+      const drift = 1 + (Math.random() - 0.5) * 0.018;
+      const soft = 0.8 + Math.random() * 0.12;
+      const panDrift = (Math.random() - 0.5) * 0.24;
 
       if (kind === "hover") {
-        connectNoise(context, {
-          frequency: 2600 * drift,
-          gain: 0.017 * soft,
-          duration: 0.085,
-          type: "bandpass",
-          q: 0.65,
+        connectTone(context, {
+          frequency: 1174.66 * drift,
+          endFrequency: 1318.51 * drift,
+          gain: 0.012 * soft,
+          duration: 0.12,
+          attack: 0.018,
+          pan: panDrift,
+          reverb: 0.42,
         });
         connectTone(context, {
-          type: "sine",
-          frequency: 540 * drift,
-          endFrequency: 700 * drift,
-          gain: 0.018 * soft,
-          duration: 0.09,
+          frequency: 1760 * drift,
+          endFrequency: 1864.66 * drift,
+          gain: 0.0045 * soft,
+          duration: 0.16,
+          start: 0.012,
+          attack: 0.02,
+          pan: -panDrift,
+          reverb: 0.58,
         });
         return;
       }
 
       if (kind === "click") {
-        connectNoise(context, {
-          frequency: 1150 * drift,
-          gain: 0.024 * soft,
-          duration: 0.055,
-          q: 1.1,
+        connectTone(context, {
+          frequency: 783.99 * drift,
+          endFrequency: 739.99 * drift,
+          gain: 0.019 * soft,
+          duration: 0.17,
+          attack: 0.009,
+          pan: panDrift,
+          reverb: 0.4,
         });
         connectTone(context, {
-          type: "triangle",
-          frequency: 235 * drift,
-          endFrequency: 178 * drift,
-          gain: 0.045 * soft,
-          duration: 0.09,
-        });
-        connectTone(context, {
-          type: "sine",
-          frequency: 410 * drift,
-          endFrequency: 330 * drift,
-          gain: 0.015 * soft,
-          duration: 0.075,
-          start: 0.012,
+          frequency: 1174.66 * drift,
+          endFrequency: 1108.73 * drift,
+          gain: 0.008 * soft,
+          duration: 0.24,
+          start: 0.014,
+          attack: 0.012,
+          pan: -panDrift,
+          reverb: 0.62,
         });
         return;
       }
 
       if (kind === "tab") {
         connectNoise(context, {
-          frequency: 1850 * drift,
-          gain: 0.032 * soft,
-          duration: 0.14,
-          q: 0.55,
+          frequency: 2850 * drift,
+          gain: 0.008 * soft,
+          duration: 0.19,
+          type: "bandpass",
+          q: 0.36,
+          pan: -0.18 + panDrift,
+          reverb: 0.24,
+          attack: 0.035,
         });
         connectTone(context, {
-          type: "sine",
-          frequency: 390 * drift,
-          endFrequency: 520 * drift,
-          gain: 0.022 * soft,
-          duration: 0.16,
+          frequency: 659.25 * drift,
+          endFrequency: 783.99 * drift,
+          gain: 0.014 * soft,
+          duration: 0.22,
+          start: 0.018,
+          attack: 0.025,
+          pan: 0.14 + panDrift,
+          reverb: 0.5,
         });
         return;
       }
 
       if (kind === "open") {
+        [392, 523.25, 783.99].forEach((frequency, index) => {
+          connectTone(context, {
+            frequency: frequency * drift,
+            endFrequency: frequency * 1.025 * drift,
+            gain: (0.015 - index * 0.0025) * soft,
+            duration: 0.36 + index * 0.08,
+            start: index * 0.055,
+            attack: 0.022,
+            pan: (-0.2 + index * 0.2) + panDrift,
+            reverb: 0.58 + index * 0.08,
+          });
+        });
         connectNoise(context, {
-          frequency: 1500 * drift,
-          gain: 0.028 * soft,
-          duration: 0.28,
-          q: 0.45,
-        });
-        connectTone(context, {
-          type: "sine",
-          frequency: 280 * drift,
-          endFrequency: 440 * drift,
-          gain: 0.033 * soft,
-          duration: 0.28,
-        });
-        connectTone(context, {
-          type: "sine",
-          frequency: 560 * drift,
-          endFrequency: 690 * drift,
-          gain: 0.012 * soft,
-          duration: 0.24,
-          start: 0.035,
+          frequency: 4300 * drift,
+          gain: 0.0045 * soft,
+          duration: 0.34,
+          start: 0.025,
+          type: "highpass",
+          q: 0.25,
+          pan: panDrift,
+          reverb: 0.48,
+          attack: 0.08,
         });
         return;
       }
 
       if (kind === "close") {
-        connectNoise(context, {
-          frequency: 1200 * drift,
-          gain: 0.022 * soft,
-          duration: 0.2,
-          q: 0.5,
-        });
-        connectTone(context, {
-          type: "sine",
-          frequency: 430 * drift,
-          endFrequency: 240 * drift,
-          gain: 0.03 * soft,
-          duration: 0.23,
+        [659.25, 493.88, 392].forEach((frequency, index) => {
+          connectTone(context, {
+            frequency: frequency * drift,
+            endFrequency: frequency * 0.97 * drift,
+            gain: (0.013 - index * 0.002) * soft,
+            duration: 0.28 + index * 0.04,
+            start: index * 0.045,
+            attack: 0.02,
+            pan: (0.18 - index * 0.18) + panDrift,
+            reverb: 0.5,
+          });
         });
         return;
       }
 
       if (kind === "success") {
-        [660, 990, 1320].forEach((frequency, index) => {
+        [523.25, 659.25, 783.99, 1046.5].forEach((frequency, index) => {
           connectTone(context, {
-            type: "sine",
             frequency: frequency * drift,
-            endFrequency: frequency * 0.985 * drift,
-            gain: (0.026 - index * 0.005) * soft,
-            duration: 0.48 - index * 0.045,
-            start: index * 0.045,
-            attack: 0.01,
+            endFrequency: frequency * 1.008 * drift,
+            gain: (0.017 - index * 0.0022) * soft,
+            duration: 0.5 + index * 0.08,
+            start: index * 0.055,
+            attack: 0.012 + index * 0.004,
+            pan: (-0.28 + index * 0.18) + panDrift,
+            reverb: 0.65,
           });
         });
-        connectNoise(context, {
-          frequency: 3400 * drift,
-          gain: 0.012 * soft,
-          duration: 0.22,
-          start: 0.02,
-          q: 1.4,
+        connectTone(context, {
+          frequency: 1567.98 * drift,
+          endFrequency: 1480 * drift,
+          gain: 0.005 * soft,
+          duration: 0.82,
+          start: 0.09,
+          attack: 0.02,
+          pan: 0.25 + panDrift,
+          reverb: 0.8,
         });
         return;
       }
 
-      connectTone(context, {
-        type: "sine",
-        frequency: 190 * drift,
-        endFrequency: 142 * drift,
-        gain: 0.052 * soft,
-        duration: 0.34,
+      [246.94, 369.99, 493.88].forEach((frequency, index) => {
+        connectTone(context, {
+          frequency: frequency * drift,
+          endFrequency: frequency * 0.955 * drift,
+          gain: (0.018 - index * 0.003) * soft,
+          duration: 0.42 + index * 0.06,
+          start: index * 0.045,
+          attack: 0.03,
+          pan: (-0.12 + index * 0.12) + panDrift,
+          reverb: 0.48,
+        });
       });
       connectTone(context, {
-        type: "triangle",
-        frequency: 285 * drift,
-        endFrequency: 215 * drift,
-        gain: 0.018 * soft,
-        duration: 0.27,
-        start: 0.025,
-      });
-      connectNoise(context, {
-        frequency: 720 * drift,
-        gain: 0.014 * soft,
-        duration: 0.12,
-        q: 0.75,
+        frequency: 739.99 * drift,
+        endFrequency: 698.46 * drift,
+        gain: 0.0045 * soft,
+        duration: 0.58,
+        start: 0.04,
+        attack: 0.04,
+        pan: panDrift,
+        reverb: 0.65,
       });
     },
     [connectNoise, connectTone, ensureContext]
@@ -571,7 +671,7 @@ export default function UiSoundSystem() {
           <label className={styles.toggleRow}>
             <span>
               <strong>{enabled ? "เปิดเสียง UI" : "ปิดเสียง UI"}</strong>
-              <small>เสียงนุ่มแบบ Dark Fantasy ASMR</small>
+              <small>ประกายเวท คริสตัล และพาร์ชเมนต์แบบนุ่ม</small>
             </span>
             <input
               type="checkbox"
@@ -624,7 +724,7 @@ export default function UiSoundSystem() {
           </div>
 
           <p className={styles.detailText}>
-            Hover จะทำงานเฉพาะเมาส์ และมีระบบพักเสียงเพื่อไม่ให้เล่นรัว
+            โทนเสียงเวทคริสตัลแบบนุ่ม ไม่มีเสียงเคาะโลหะหรือเสียงกระแทกแข็ง
           </p>
         </section>
       ) : null}
