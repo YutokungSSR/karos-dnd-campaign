@@ -192,7 +192,7 @@ export default function GodGiftSystem() {
   const [giftQueue, setGiftQueue] = useState<GiftNotification[]>([]);
   const toastTimerRef = useRef<number | null>(null);
   const effectTimerRef = useRef<number | null>(null);
-  const shownNotificationRef = useRef<string | null>(null);
+  const shownNotificationIdsRef = useRef<Set<string>>(new Set());
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedItems = useMemo(
@@ -227,7 +227,8 @@ export default function GodGiftSystem() {
   const targetCharacter = characterById.get(targetCharacterId) ?? null;
 
   const enqueueGiftNotification = useCallback((notification: GiftNotification) => {
-    if (shownNotificationRef.current === notification.id) return;
+    if (shownNotificationIdsRef.current.has(notification.id)) return;
+    shownNotificationIdsRef.current.add(notification.id);
     setGiftQueue((current) =>
       current.some((entry) => entry.id === notification.id)
         ? current
@@ -238,14 +239,8 @@ export default function GodGiftSystem() {
   useEffect(() => {
     if (giftToast || !giftQueue.length) return;
     const notification = giftQueue[0];
-    shownNotificationRef.current = notification.id;
     setGiftQueue((current) => current.slice(1));
     setGiftToast(notification);
-
-    getSupabase()
-      .from("god_gift_notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("id", notification.id);
 
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setGiftToast(null), 8500);
@@ -407,56 +402,69 @@ export default function GodGiftSystem() {
   }, [categoryById, selectedItems]);
 
   useEffect(() => {
-    if (!characterId || !user) return;
+    if (!user || (!campaignId && !characterId)) return;
     let active = true;
-    const signedInUserId = user.id;
     const supabase = getSupabase();
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let pollTimer: number | null = null;
+    let claiming = false;
+
+    async function claimNotifications() {
+      if (!active || claiming) return;
+      claiming = true;
+      const { data, error } = await supabase.rpc(
+        "claim_god_gift_notifications",
+        {
+          target_campaign: campaignId || null,
+          target_character: characterId || null,
+          max_rows: 10,
+        }
+      );
+      claiming = false;
+
+      if (!active || error) return;
+      for (const notification of (data ?? []) as GiftNotification[]) {
+        enqueueGiftNotification(notification);
+      }
+    }
 
     async function startNotificationListener() {
-      const { data: character, error } = await supabase
-        .from("characters")
-        .select("owner_id")
-        .eq("id", characterId)
-        .maybeSingle();
+      await claimNotifications();
+      if (!active) return;
 
-      if (!active || error || character?.owner_id !== signedInUserId) return;
-
-      const { data: unread } = await supabase
-        .from("god_gift_notifications")
-        .select("*")
-        .eq("recipient_character_id", characterId)
-        .is("read_at", null)
-        .order("created_at", { ascending: true })
-        .limit(10);
-
-      if (active) {
-        for (const notification of (unread ?? []) as GiftNotification[]) {
-          enqueueGiftNotification(notification);
-        }
-      }
+      const filter = characterId
+        ? `recipient_character_id=eq.${characterId}`
+        : `campaign_id=eq.${campaignId}`;
+      const scope = characterId ? `character-${characterId}` : `campaign-${campaignId}`;
 
       channel = supabase
-        .channel(`god-gifts-${characterId}`)
+        .channel(`god-gifts-${scope}`)
         .on(
           "postgres_changes",
           {
             event: "INSERT",
             schema: "public",
             table: "god_gift_notifications",
-            filter: `recipient_character_id=eq.${characterId}`,
+            filter,
           },
-          (payload) => enqueueGiftNotification(payload.new as GiftNotification)
+          () => {
+            void claimNotifications();
+          }
         )
         .subscribe();
+
+      pollTimer = window.setInterval(() => {
+        void claimNotifications();
+      }, 30000);
     }
 
-    startNotificationListener();
+    void startNotificationListener();
     return () => {
       active = false;
+      if (pollTimer) window.clearInterval(pollTimer);
       if (channel) supabase.removeChannel(channel);
     };
-  }, [characterId, enqueueGiftNotification, user]);
+  }, [campaignId, characterId, enqueueGiftNotification, user]);
 
   useEffect(() => {
     return () => {
