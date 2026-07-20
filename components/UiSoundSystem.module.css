@@ -1,0 +1,342 @@
+.soundDock {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 1750;
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.soundButton,
+.soundPanel {
+  pointer-events: auto;
+}
+
+.soundButton {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #2b1b07;
+  border: 1px solid rgba(255, 231, 164, 0.82);
+  border-radius: 15px;
+  background:
+    radial-gradient(circle at 34% 25%, #fff3bd, #d9a840 56%, #6d4511 100%);
+  box-shadow:
+    0 14px 35px rgba(0, 0, 0, 0.48),
+    0 0 30px rgba(232, 184, 72, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  cursor: pointer;
+  transition: transform 0.22s ease, filter 0.22s ease, opacity 0.22s ease;
+}
+
+.soundButton:hover {
+  transform: translateY(-2px) scale(1.035);
+  filter: brightness(1.08);
+}
+
+.soundButton > span {
+  position: relative;
+  z-index: 2;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+
+.soundButton > i {
+  position: absolute;
+  inset: -40%;
+  border: 1px dashed rgba(255, 244, 201, 0.5);
+  border-radius: 50%;
+  animation: soundRing 11s linear infinite;
+}
+
+.soundButton.enabled::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff0a9;
+  box-shadow: 0 0 10px #ffdc6b;
+  animation: soundPulse 2.3s ease-in-out infinite;
+}
+
+.soundButton.muted {
+  filter: grayscale(0.55) brightness(0.75);
+  opacity: 0.8;
+}
+
+.soundPanel {
+  position: relative;
+  width: min(340px, calc(100vw - 28px));
+  overflow: hidden;
+  padding: 15px;
+  color: #ebddc2;
+  border: 1px solid rgba(226, 190, 102, 0.42);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 0 0, rgba(225, 181, 75, 0.14), transparent 43%),
+    linear-gradient(150deg, rgba(38, 25, 15, 0.985), rgba(10, 8, 7, 0.995));
+  box-shadow:
+    0 28px 75px rgba(0, 0, 0, 0.62),
+    inset 0 0 55px rgba(219, 173, 65, 0.025);
+  backdrop-filter: blur(15px);
+  animation: panelAppear 0.26s cubic-bezier(0.2, 0.9, 0.2, 1.08) both;
+}
+
+.panelAura {
+  position: absolute;
+  inset: -100px;
+  pointer-events: none;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 222, 135, 0.028) 0 8deg,
+    transparent 8deg 22deg
+  );
+  animation: soundRing 24s linear infinite;
+}
+
+.soundPanel header,
+.toggleRow,
+.volumeBlock,
+.previewGrid,
+.unlockNote,
+.detailText {
+  position: relative;
+  z-index: 1;
+}
+
+.soundPanel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.soundPanel header > div {
+  display: grid;
+  gap: 1px;
+}
+
+.soundPanel header small {
+  color: #9d8458;
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+}
+
+.soundPanel header strong {
+  color: #fff0cb;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.05rem;
+}
+
+.closeButton {
+  width: 31px;
+  height: 31px;
+  color: #bfae90;
+  border: 1px solid rgba(216, 179, 95, 0.18);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 1.1rem;
+}
+
+.toggleRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 43px;
+  gap: 12px;
+  align-items: center;
+  padding: 11px;
+  border: 1px solid rgba(216, 179, 95, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.022);
+  cursor: pointer;
+}
+
+.toggleRow > span {
+  display: grid;
+  gap: 2px;
+}
+
+.toggleRow strong {
+  color: #ead8b7;
+  font-size: 0.85rem;
+}
+
+.toggleRow small {
+  color: #93836b;
+  font-size: 0.67rem;
+}
+
+.toggleRow input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggleRow > i {
+  position: relative;
+  width: 43px;
+  height: 24px;
+  border: 1px solid rgba(216, 179, 95, 0.24);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  transition: 0.22s ease;
+}
+
+.toggleRow > i::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #8e7a5b;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  transition: 0.22s ease;
+}
+
+.toggleRow input:checked + i {
+  border-color: rgba(255, 221, 124, 0.55);
+  background: rgba(171, 116, 25, 0.28);
+}
+
+.toggleRow input:checked + i::after {
+  transform: translateX(19px);
+  background: #f2c968;
+  box-shadow: 0 0 12px rgba(244, 199, 93, 0.42);
+}
+
+.volumeBlock {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 11px;
+  border: 1px solid rgba(216, 179, 95, 0.13);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.volumeBlock > div {
+  display: flex;
+  justify-content: space-between;
+  color: #aa987b;
+  font-size: 0.72rem;
+}
+
+.volumeBlock strong {
+  color: #efd58f;
+}
+
+.volumeBlock input[type="range"] {
+  width: 100%;
+  accent-color: #d5a544;
+}
+
+.unlockNote {
+  margin: 9px 0 0;
+  padding: 8px 9px;
+  color: #d2b77a;
+  border: 1px solid rgba(218, 171, 62, 0.19);
+  border-radius: 9px;
+  background: rgba(179, 119, 20, 0.08);
+  font-size: 0.67rem;
+  line-height: 1.5;
+}
+
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.previewGrid button {
+  min-height: 34px;
+  color: #c8b797;
+  border: 1px solid rgba(216, 179, 95, 0.14);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 0.67rem;
+  transition: 0.18s ease;
+}
+
+.previewGrid button:hover {
+  color: #ffe9b4;
+  border-color: rgba(232, 195, 107, 0.38);
+  background: rgba(216, 179, 95, 0.08);
+}
+
+.detailText {
+  margin: 9px 0 0;
+  color: #81735f;
+  font-size: 0.62rem;
+  line-height: 1.55;
+}
+
+@keyframes panelAppear {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+    filter: blur(5px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+@keyframes soundRing {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes soundPulse {
+  0%,
+  100% {
+    opacity: 0.48;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+@media (max-width: 680px) {
+  .soundDock {
+    left: 12px;
+    bottom: 12px;
+  }
+
+  .soundButton {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+  }
+
+  .soundPanel {
+    width: calc(100vw - 24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soundButton,
+  .soundButton > i,
+  .soundButton.enabled::after,
+  .soundPanel,
+  .panelAura {
+    animation: none !important;
+    transition: none !important;
+  }
+}

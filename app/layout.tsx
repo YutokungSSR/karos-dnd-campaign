@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Embers from "@/components/Embers";
 import GodGiftSystem from "@/components/GodGiftSystem";
+import UiSoundSystem from "@/components/UiSoundSystem";
 
 export const metadata: Metadata = {
   title: "มหาคัมภีร์แห่งออดมา | D&D Campaign",
@@ -16,6 +17,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <div className="pageGlow" aria-hidden="true" />
         {children}
         <GodGiftSystem />
+        <UiSoundSystem />
       </body>
     </html>
   );
