@@ -1,4 +1,4 @@
-  "use client";
+"use client";
 
 import {
   type CSSProperties,
@@ -266,6 +266,13 @@ export default function LiveSceneStage({
   const currentVersionRef = useRef(0);
   const transitionSequenceRef = useRef(0);
   const objectsRef = useRef<SceneObject[]>([]);
+  const studioOpenRef = useRef(false);
+  const restoringStudioRef = useRef(false);
+
+  const studioSessionKey = useMemo(
+    () => `live-scene-studio:${campaignId}:${userId}`,
+    [campaignId, userId]
+  );
   const dragRef = useRef<{
     id: string;
     startClientX: number;
@@ -277,6 +284,10 @@ export default function LiveSceneStage({
   useEffect(() => {
     objectsRef.current = objects;
   }, [objects]);
+
+  useEffect(() => {
+    studioOpenRef.current = studioOpen;
+  }, [studioOpen]);
 
   useEffect(() => {
     let active = true;
@@ -606,33 +617,50 @@ export default function LiveSceneStage({
     }
   }, [campaignId, selectedSceneId]);
 
-  async function openStudio() {
-    if (!isDm) return;
-    setStudioMessage("");
-    const { data, error } = await getSupabase().rpc(
-      "acquire_live_scene_lock",
-      {
-        target_campaign: campaignId,
-        lease_seconds: 90,
+  const openStudio = useCallback(
+    async (preferredSceneId = "", restoring = false) => {
+      if (!isDm || restoringStudioRef.current) return;
+      restoringStudioRef.current = true;
+      setStudioMessage("");
+
+      try {
+        const { data, error } = await getSupabase().rpc(
+          "acquire_live_scene_lock",
+          {
+            target_campaign: campaignId,
+            lease_seconds: 300,
+          }
+        );
+        if (error) {
+          if (!restoring) setStageMessage(error.message);
+          return;
+        }
+
+        const result = data as LockResult;
+        setLockInfo(result);
+        if (!result.acquired) {
+          window.sessionStorage.removeItem(studioSessionKey);
+          setStageMessage(
+            `${result.editor_name || "DM คนอื่น"} กำลังจัดฉากนี้อยู่ กรุณารอให้ Studio ถูกปล่อยก่อน`
+          );
+          return;
+        }
+
+        setStudioOpen(true);
+        window.sessionStorage.setItem(
+          studioSessionKey,
+          JSON.stringify({ open: true, selectedSceneId: preferredSceneId })
+        );
+        await loadStudio(preferredSceneId || undefined);
+      } finally {
+        restoringStudioRef.current = false;
       }
-    );
-    if (error) {
-      setStageMessage(error.message);
-      return;
-    }
-    const result = data as LockResult;
-    setLockInfo(result);
-    if (!result.acquired) {
-      setStageMessage(
-        `${result.editor_name || "DM คนอื่น"} กำลังจัดฉากนี้อยู่ กรุณารอให้ Studio ถูกปล่อยก่อน`
-      );
-      return;
-    }
-    setStudioOpen(true);
-    await loadStudio();
-  }
+    },
+    [campaignId, isDm, loadStudio, studioSessionKey]
+  );
 
   const closeStudio = useCallback(async () => {
+    window.sessionStorage.removeItem(studioSessionKey);
     setStudioOpen(false);
     setPreviewMode(false);
     setSelectedObjectId("");
@@ -640,31 +668,113 @@ export default function LiveSceneStage({
     await getSupabase().rpc("release_live_scene_lock", {
       target_campaign: campaignId,
     });
-  }, [campaignId]);
+  }, [campaignId, studioSessionKey]);
+
+  useEffect(() => {
+    if (!isDm || studioOpen || restoringStudioRef.current) return;
+
+    const raw = window.sessionStorage.getItem(studioSessionKey);
+    if (!raw) return;
+
+    try {
+      const saved = JSON.parse(raw) as {
+        open?: boolean;
+        selectedSceneId?: string;
+      };
+      if (saved.open) {
+        void openStudio(saved.selectedSceneId ?? "", true);
+      }
+    } catch {
+      window.sessionStorage.removeItem(studioSessionKey);
+    }
+  }, [isDm, openStudio, studioOpen, studioSessionKey]);
+
+  useEffect(() => {
+    if (!studioOpen) return;
+    window.sessionStorage.setItem(
+      studioSessionKey,
+      JSON.stringify({ open: true, selectedSceneId })
+    );
+  }, [selectedSceneId, studioOpen, studioSessionKey]);
 
   useEffect(() => {
     if (!studioOpen || !lockInfo?.acquired) return;
+
+    let refreshing = false;
+    const refreshLock = async () => {
+      if (refreshing || document.visibilityState === "hidden") return;
+      refreshing = true;
+      try {
+        const { data, error } = await getSupabase().rpc(
+          "acquire_live_scene_lock",
+          {
+            target_campaign: campaignId,
+            lease_seconds: 300,
+          }
+        );
+        if (error) {
+          setStudioMessage(error.message);
+          return;
+        }
+
+        const result = data as LockResult;
+        setLockInfo(result);
+        if (!result.acquired) {
+          window.sessionStorage.removeItem(studioSessionKey);
+          setStudioOpen(false);
+          setStudioMessage(
+            `${result.editor_name || "DM คนอื่น"} รับช่วงแก้ไขฉากนี้แล้ว`
+          );
+          return;
+        }
+
+        await loadStudio(selectedSceneId || undefined);
+      } finally {
+        refreshing = false;
+      }
+    };
+
     const heartbeat = window.setInterval(async () => {
       const { data } = await getSupabase().rpc("heartbeat_live_scene_lock", {
         target_campaign: campaignId,
-        lease_seconds: 90,
+        lease_seconds: 300,
       });
-      if (!data) {
-        setStudioMessage("สิทธิ์แก้ไขฉากหมดอายุ กรุณาปิดแล้วเปิด DM Studio ใหม่");
+      if (!data && document.visibilityState === "visible") {
+        await refreshLock();
       }
-    }, 25000);
-    return () => window.clearInterval(heartbeat);
-  }, [campaignId, lockInfo?.acquired, studioOpen]);
+    }, 30000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void refreshLock();
+    };
+    const handleFocus = () => void refreshLock();
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.clearInterval(heartbeat);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [
+    campaignId,
+    loadStudio,
+    lockInfo?.acquired,
+    selectedSceneId,
+    studioOpen,
+    studioSessionKey,
+  ]);
 
   useEffect(() => {
     return () => {
-      if (studioOpen) {
+      if (studioOpenRef.current) {
         getSupabase().rpc("release_live_scene_lock", {
           target_campaign: campaignId,
         });
       }
     };
-  }, [campaignId, studioOpen]);
+  }, [campaignId]);
 
   async function chooseScene(sceneId: string) {
     setSelectedSceneId(sceneId);
@@ -1085,7 +1195,7 @@ export default function LiveSceneStage({
           </div>
           <div className={styles.stageActions}>
             {isDm ? (
-              <button type="button" onClick={openStudio}>
+              <button type="button" onClick={() => void openStudio()}>
                 ✦ เปิด DM Studio
               </button>
             ) : null}
