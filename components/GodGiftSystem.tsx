@@ -409,6 +409,7 @@ export default function GodGiftSystem() {
   useEffect(() => {
     if (!characterId || !user) return;
     let active = true;
+    const signedInUserId = user.id;
     const supabase = getSupabase();
     let channel: ReturnType<typeof supabase.channel> | null = null;
 
@@ -419,7 +420,7 @@ export default function GodGiftSystem() {
         .eq("id", characterId)
         .maybeSingle();
 
-      if (!active || error || character?.owner_id !== user.id) return;
+      if (!active || error || character?.owner_id !== signedInUserId) return;
 
       const { data: unread } = await supabase
         .from("god_gift_notifications")
