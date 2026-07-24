@@ -1,0 +1,172 @@
+.vitalsPanel {
+  width: min(100%, 510px);
+  min-width: 390px;
+  display: grid;
+  gap: 8px;
+}
+
+.vitalsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.vitalCard {
+  --vital-start: #6c2a2f;
+  --vital-end: #dd6b73;
+  --vital-glow: rgba(221, 107, 115, 0.24);
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid rgba(216, 179, 95, 0.14);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 100% 0, var(--vital-glow), transparent 42%),
+    rgba(255, 255, 255, 0.018);
+}
+
+.vital_mp {
+  --vital-start: #334b91;
+  --vital-end: #779cff;
+  --vital-glow: rgba(98, 137, 255, 0.22);
+}
+
+.vital_food {
+  --vital-start: #80501d;
+  --vital-end: #e3a64c;
+  --vital-glow: rgba(227, 166, 76, 0.22);
+}
+
+.vital_water {
+  --vital-start: #1f6476;
+  --vital-end: #55c8df;
+  --vital-glow: rgba(85, 200, 223, 0.22);
+}
+
+.vitalHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+  color: #eadfc8;
+  font-size: 0.69rem;
+}
+
+.vitalHeader strong {
+  color: #fff2d3;
+  letter-spacing: 0.04em;
+}
+
+.vitalHeader span {
+  color: #bdad92;
+  font-variant-numeric: tabular-nums;
+}
+
+.vitalTrack {
+  height: 8px;
+  margin-top: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.42);
+}
+
+.vitalTrack i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--vital-start), var(--vital-end));
+  box-shadow: 0 0 10px var(--vital-glow);
+  transition: width 0.4s ease;
+}
+
+.vitalControls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.vitalControls button {
+  min-width: 0;
+  padding: 3px 2px;
+  color: #e9dcc3;
+  border: 1px solid rgba(216, 179, 95, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 0.64rem;
+  transition: 0.16s ease;
+}
+
+.vitalControls button:hover:not(:disabled) {
+  color: #fff1c9;
+  border-color: rgba(244, 221, 160, 0.55);
+  background: rgba(216, 179, 95, 0.09);
+  transform: translateY(-1px);
+}
+
+.vitalControls button:disabled {
+  opacity: 0.48;
+  cursor: wait;
+}
+
+.vitalsFooter {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.vitalsFooter span {
+  color: #8f7e64;
+  font-size: 0.58rem;
+  letter-spacing: 0.13em;
+}
+
+.vitalsFooter a {
+  padding: 4px 8px;
+  color: #ead6aa;
+  border: 1px solid rgba(216, 179, 95, 0.18);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 0.67rem;
+}
+
+.vitalsFooter a:hover {
+  color: #fff1c9;
+  border-color: rgba(244, 221, 160, 0.5);
+}
+
+@media (max-width: 980px) {
+  .vitalsPanel {
+    min-width: 320px;
+  }
+
+  .vitalsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .vitalsPanel {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .vitalsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .vitalsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vitalTrack i,
+  .vitalControls button {
+    transition: none;
+  }
+}
