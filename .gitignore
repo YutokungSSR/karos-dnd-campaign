@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+.vercel/
+supabase/.temp/
+
+*.log
+.env
+.env.*
+!.env.example
