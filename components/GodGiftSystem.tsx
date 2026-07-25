@@ -567,19 +567,20 @@ export default function GodGiftSystem() {
     });
 
     const supabase = getSupabase();
-    let success = 0;
-    let failed = 0;
+    const outcomes: boolean[] = [];
     const errors: string[] = [];
 
-    for (let index = 0; index < selectedItems.length; index += 1) {
-      const item = selectedItems[index];
+    for (const [index, item] of selectedItems.entries()) {
       const inventoryItemId = crypto.randomUUID();
       let copiedImagePath = "";
+      const completedSuccess = outcomes.filter(Boolean).length;
+      const completedFailed = outcomes.length - completedSuccess;
+
       setProgress((current) => ({
         ...current,
         current: index,
-        success,
-        failed,
+        success: completedSuccess,
+        failed: completedFailed,
         current_name: item.name,
       }));
 
@@ -616,9 +617,9 @@ export default function GodGiftSystem() {
           show_notification: notifyPlayer,
         });
         if (error) throw error;
-        success += 1;
+        outcomes.push(true);
       } catch (error) {
-        failed += 1;
+        outcomes.push(false);
         errors.push(`${item.name}: ${errorText(error)}`);
         if (copiedImagePath) {
           await supabase.storage
@@ -627,15 +628,18 @@ export default function GodGiftSystem() {
         }
       }
 
+      const success = outcomes.filter(Boolean).length;
       setProgress({
         current: index + 1,
         total: selectedItems.length,
         success,
-        failed,
+        failed: outcomes.length - success,
         current_name: item.name,
       });
     }
 
+    const success = outcomes.filter(Boolean).length;
+    const failed = outcomes.length - success;
     setSending(false);
     if (success > 0) {
       setDeliveryEffect({

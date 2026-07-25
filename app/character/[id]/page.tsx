@@ -14,6 +14,11 @@ import { getSupabase } from "@/lib/supabase";
 
 const STAT_KEYS = ["STR", "VIT", "AGI", "INT", "DEX", "WIS", "CHA"];
 
+function toNonNegativeInteger(value: unknown, fallback: number) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.trunc(number)) : fallback;
+}
+
 export default function CharacterPage() {
   const params = useParams();
   const id = params.id as string;
@@ -91,9 +96,12 @@ export default function CharacterPage() {
     setInventoryReady(!inventoryResult.error && !itemResult.error);
 
     if (char?.campaign_id) {
-      const { data: dmAllowed } = await supabase.rpc("is_campaign_dm", {
-        target_campaign: char.campaign_id,
-      });
+      const { data: dmAllowed } = await supabase.rpc(
+        "can_manage_party_vitals",
+        {
+          target_campaign: char.campaign_id,
+        }
+      );
       setIsDm(Boolean(dmAllowed));
     } else {
       setIsDm(false);
@@ -137,6 +145,33 @@ export default function CharacterPage() {
         },
         () => load()
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "characters",
+          filter: `id=eq.${id}`,
+        },
+        (payload) => {
+          const next = payload.new as Record<string, unknown>;
+          setCharacter((current: any) =>
+            current
+              ? {
+                  ...current,
+                  current_hp: next.current_hp ?? current.current_hp,
+                  max_hp: next.max_hp ?? current.max_hp,
+                  current_mp: next.current_mp ?? current.current_mp,
+                  max_mp: next.max_mp ?? current.max_mp,
+                  current_food: next.current_food ?? current.current_food,
+                  max_food: next.max_food ?? current.max_food,
+                  current_water: next.current_water ?? current.current_water,
+                  max_water: next.max_water ?? current.max_water,
+                }
+              : current
+          );
+        }
+      )
       .subscribe();
 
     return () => {
@@ -163,26 +198,63 @@ export default function CharacterPage() {
     setMessage("");
     const supabase = getSupabase();
 
+    const characterUpdate: Record<string, unknown> = {
+      name: character.name,
+      title: character.title,
+      class_name: character.class_name,
+      level: Number(character.level),
+      rank: character.rank,
+      element: character.element,
+      race: character.race,
+      stars: character.stars,
+      condition_text: character.condition_text,
+      memory: character.memory,
+      stats: character.stats,
+      is_public: Boolean(character.is_public),
+    };
+
+    if (isDm) {
+      const maxHp = Math.max(
+        1,
+        toNonNegativeInteger(character.max_hp, 20)
+      );
+      const maxMp = toNonNegativeInteger(character.max_mp, 10);
+      const maxFood = Math.max(
+        1,
+        toNonNegativeInteger(character.max_food, 100)
+      );
+      const maxWater = Math.max(
+        1,
+        toNonNegativeInteger(character.max_water, 100)
+      );
+
+      Object.assign(characterUpdate, {
+        current_hp: Math.min(
+          maxHp,
+          toNonNegativeInteger(character.current_hp, 20)
+        ),
+        max_hp: maxHp,
+        current_mp: Math.min(
+          maxMp,
+          toNonNegativeInteger(character.current_mp, 10)
+        ),
+        max_mp: maxMp,
+        current_food: Math.min(
+          maxFood,
+          toNonNegativeInteger(character.current_food, 100)
+        ),
+        max_food: maxFood,
+        current_water: Math.min(
+          maxWater,
+          toNonNegativeInteger(character.current_water, 100)
+        ),
+        max_water: maxWater,
+      });
+    }
+
     const { error } = await supabase
       .from("characters")
-      .update({
-        name: character.name,
-        title: character.title,
-        class_name: character.class_name,
-        level: Number(character.level),
-        rank: character.rank,
-        element: character.element,
-        race: character.race,
-        stars: character.stars,
-        condition_text: character.condition_text,
-        memory: character.memory,
-        current_hp: Number(character.current_hp),
-        max_hp: Math.max(1, Number(character.max_hp)),
-        current_mp: Number(character.current_mp),
-        max_mp: Math.max(0, Number(character.max_mp)),
-        stats: character.stats,
-        is_public: Boolean(character.is_public),
-      })
+      .update(characterUpdate)
       .eq("id", id);
 
     if (error) return setMessage(error.message);
@@ -333,7 +405,7 @@ export default function CharacterPage() {
             <span className="notice compact">{message}</span>
           ) : (
             <span className="mutedText">
-              เจ้าของตัวละครและ DM สามารถแก้ไขได้
+              เจ้าของแก้ข้อมูลทั่วไปได้ ส่วนค่าพลังแก้ได้เฉพาะ DM และ Owner
             </span>
           )}
         </div>
@@ -506,25 +578,35 @@ export default function CharacterPage() {
               </Field>
             </div>
 
-            <div className="editGrid resourcesEdit">
-              {[
-                ["HP ปัจจุบัน", "current_hp"],
-                ["HP สูงสุด", "max_hp"],
-                ["MP ปัจจุบัน", "current_mp"],
-                ["MP สูงสุด", "max_mp"],
-              ].map(([label, key]) => (
-                <Field label={label} key={key}>
-                  <input
-                    type="number"
-                    min="0"
-                    value={character[key]}
-                    onChange={(event) =>
-                      updateField(key, Number(event.target.value))
-                    }
-                  />
-                </Field>
-              ))}
-            </div>
+            {isDm ? (
+              <div className="editGrid resourcesEdit">
+                {[
+                  ["HP ปัจจุบัน", "current_hp"],
+                  ["HP สูงสุด", "max_hp"],
+                  ["MP ปัจจุบัน", "current_mp"],
+                  ["MP สูงสุด", "max_mp"],
+                  ["อาหารปัจจุบัน", "current_food"],
+                  ["อาหารสูงสุด", "max_food"],
+                  ["น้ำปัจจุบัน", "current_water"],
+                  ["น้ำสูงสุด", "max_water"],
+                ].map(([label, key]) => (
+                  <Field label={label} key={key}>
+                    <input
+                      type="number"
+                      min={key.startsWith("max_") && key !== "max_mp" ? 1 : 0}
+                      value={character[key] ?? 0}
+                      onChange={(event) =>
+                        updateField(key, Number(event.target.value))
+                      }
+                    />
+                  </Field>
+                ))}
+              </div>
+            ) : (
+              <p className="mutedText">
+                ค่าพลัง HP, MP, อาหาร และน้ำ แก้ไขได้เฉพาะ DM และ Owner
+              </p>
+            )}
 
             <h3>ค่าสถานะ</h3>
             <div className="editGrid statEditGrid">

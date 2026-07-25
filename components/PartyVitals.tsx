@@ -134,6 +134,9 @@ export default function PartyVitals({
 
       emitSound("success");
       await onUpdated();
+    } catch {
+      emitSound("warning");
+      onMessage?.("ไม่สามารถปรับค่าพลังได้ กรุณาลองใหม่อีกครั้ง");
     } finally {
       setBusyKey(null);
     }
@@ -192,7 +195,9 @@ export default function PartyVitals({
 
       <div className={styles.vitalsFooter}>
         <span>{canEdit ? "DM CONTROL" : "READ ONLY"}</span>
-        <Link href={`/character/${character.id}#inventory`}>เปิดคลัง</Link>
+        {canEdit ? (
+          <Link href={`/character/${character.id}#inventory`}>เปิดคลัง</Link>
+        ) : null}
       </div>
     </div>
   );

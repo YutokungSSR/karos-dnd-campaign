@@ -7,6 +7,7 @@ import AppNav from "@/components/AppNav";
 import DiceRoller from "@/components/DiceRoller";
 import GodVault from "@/components/GodVault";
 import Loading from "@/components/Loading";
+import PartyVitals from "@/components/PartyVitals";
 import { useAuth } from "@/lib/useAuth";
 import { getSupabase } from "@/lib/supabase";
 import styles from "./CampaignPage.module.css";
@@ -205,25 +206,6 @@ export default function CampaignPage() {
     window.location.href = `/character/${characterId}`;
   }
 
-  async function changeHp(character: any, amount: number) {
-    const next = Math.min(
-      character.max_hp,
-      Math.max(0, character.current_hp + amount)
-    );
-
-    const { error } = await getSupabase()
-      .from("characters")
-      .update({ current_hp: next })
-      .eq("id", character.id);
-
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-
-    await refreshCharacters();
-  }
-
   async function copyInvite() {
     await navigator.clipboard.writeText(campaign.invite_code);
     setMessage("คัดลอกรหัสเชิญแล้ว");
@@ -378,71 +360,41 @@ export default function CampaignPage() {
 
               <div className="partyList">
                 {characters.length ? (
-                  characters.map((character) => {
-                    const hpPercent = character.max_hp
-                      ? Math.round(
-                          (character.current_hp / character.max_hp) * 100
-                        )
-                      : 0;
-
-                    return (
-                      <div className="partyRow" key={character.id}>
-                        <Link
-                          href={`/character/${character.id}`}
-                          className="partyIdentity"
-                        >
-                          <div className="avatarCircle">
-                            {character.portrait_url ? (
-                              <img src={character.portrait_url} alt="" />
-                            ) : (
-                              "♜"
-                            )}
-                          </div>
-
-                          <div>
-                            <small>
-                              {character.rank} · LV.{character.level}
-                            </small>
-                            <strong>{character.name}</strong>
-                            <span>
-                              {character.class_name || "ไม่ระบุคลาส"}
-                            </span>
-                          </div>
-                        </Link>
-
-                        <div className="partyResources">
-                          <div className="miniResource">
-                            <span>
-                              HP {character.current_hp}/{character.max_hp}
-                            </span>
-                            <div>
-                              <i style={{ width: `${hpPercent}%` }} />
-                            </div>
-                          </div>
-
-                          {isDm ? (
-                            <div className="hpControls">
-                              <button onClick={() => changeHp(character, -5)}>
-                                −5
-                              </button>
-                              <button onClick={() => changeHp(character, -1)}>
-                                −1
-                              </button>
-                              <button onClick={() => changeHp(character, 1)}>
-                                +1
-                              </button>
-                              <button onClick={() => changeHp(character, 5)}>
-                                +5
-                              </button>
-                              <Link href={`/character/${character.id}#inventory`}>
-                                เปิดคลัง
-                              </Link>
-                            </div>
-                          ) : null}
+                  characters.map((character) => (
+                    <div className="partyRow" key={character.id}>
+                      <Link
+                        href={`/character/${character.id}`}
+                        className="partyIdentity"
+                      >
+                        <div className="avatarCircle">
+                          {character.portrait_url ? (
+                            <img src={character.portrait_url} alt="" />
+                          ) : (
+                            "♜"
+                          )}
                         </div>
+
+                        <div>
+                          <small>
+                            {character.rank} · LV.{character.level}
+                          </small>
+                          <strong>{character.name}</strong>
+                          <span>
+                            {character.class_name || "ไม่ระบุคลาส"}
+                          </span>
+                        </div>
+                      </Link>
+
+                      <div className="partyResources">
+                        <PartyVitals
+                          character={character}
+                          canEdit={isDm}
+                          onUpdated={refreshCharacters}
+                          onMessage={setMessage}
+                        />
                       </div>
-                    );
-                  })
+                    </div>
+                  ))
                 ) : (
                   <p className="emptyText">ยังไม่มีตัวละครในแคมเปญนี้</p>
                 )}

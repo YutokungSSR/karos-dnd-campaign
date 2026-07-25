@@ -80,6 +80,13 @@ type MotionEffect = {
 
 const TEMMA = new Intl.NumberFormat("th-TH");
 
+async function markNotificationRead(id: string) {
+  await getSupabase()
+    .from("character_exchange_notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", id);
+}
+
 export default function CharacterExchange({
   character,
   items,
@@ -98,7 +105,7 @@ export default function CharacterExchange({
   const [characters, setCharacters] = useState<CharacterOption[]>([]);
   const [activeTrade, setActiveTrade] = useState<TradeRow | null>(null);
   const [tradeItems, setTradeItems] = useState<TradeItemRow[]>([]);
-  const [notifications, setNotifications] = useState<ExchangeNotification[]>([]);
+  const [, setNotifications] = useState<ExchangeNotification[]>([]);
   const [signedImages, setSignedImages] = useState<Record<string, string>>({});
 
   const [overlay, setOverlay] = useState<OverlayMode>("closed");
@@ -120,6 +127,23 @@ export default function CharacterExchange({
   const toastTimerRef = useRef<number | null>(null);
   const effectTimerRef = useRef<number | null>(null);
   const shownNotificationRef = useRef<string | null>(null);
+
+  const showNotification = useCallback(
+    (notification: ExchangeNotification) => {
+      shownNotificationRef.current = notification.id;
+      setToast(notification);
+      void markNotificationRead(notification.id);
+
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+      toastTimerRef.current = window.setTimeout(
+        () => setToast(null),
+        notification.tone === "red" ? 7600 : 6000
+      );
+    },
+    []
+  );
 
   const transferableItems = useMemo(
     () =>
@@ -280,7 +304,7 @@ export default function CharacterExchange({
     if (unread && shownNotificationRef.current !== unread.id) {
       showNotification(unread);
     }
-  }, [character.campaign_id, character.id, onMessage]);
+  }, [character.campaign_id, character.id, onMessage, showNotification]);
 
   const loadSignedImages = useCallback(async () => {
     const paths = [
@@ -368,6 +392,7 @@ export default function CharacterExchange({
     character.id,
     loadExchange,
     onChanged,
+    showNotification,
   ]);
 
   useEffect(() => {
@@ -376,25 +401,6 @@ export default function CharacterExchange({
       if (effectTimerRef.current) window.clearTimeout(effectTimerRef.current);
     };
   }, []);
-
-  async function markNotificationRead(id: string) {
-    await getSupabase()
-      .from("character_exchange_notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("id", id);
-  }
-
-  function showNotification(notification: ExchangeNotification) {
-    shownNotificationRef.current = notification.id;
-    setToast(notification);
-    markNotificationRead(notification.id);
-
-    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = window.setTimeout(
-      () => setToast(null),
-      notification.tone === "red" ? 7600 : 6000
-    );
-  }
 
   function playEffect(next: MotionEffect) {
     setEffect(next);
