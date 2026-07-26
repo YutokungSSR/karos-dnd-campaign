@@ -1,0 +1,65 @@
+.phasePanel,
+.lifecyclePanel,
+.closedInventory {
+  margin-top: 14px;
+  border: 1px solid rgba(216, 179, 95, 0.22);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(216, 179, 95, 0.08), transparent 32%),
+    linear-gradient(145deg, rgba(31, 21, 14, 0.94), rgba(8, 7, 6, 0.98));
+}
+
+.phasePanel {
+  padding: 22px;
+  color: #9e8c70;
+  text-align: center;
+}
+
+.lifecyclePanel {
+  overflow: hidden;
+}
+
+.lifecyclePanel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(216, 179, 95, 0.15);
+}
+
+.lifecyclePanel header > div { min-width: 0; }
+.lifecyclePanel header small,
+.confirmModal header small { color: #ad8b48; font-size: 0.58rem; font-weight: 900; letter-spacing: 0.18em; }
+.lifecyclePanel h3,
+.confirmModal h3 { margin: 3px 0; color: #f1dfbd; font-family: Georgia, "Times New Roman", serif; }
+.lifecyclePanel header p { margin: 0; color: #93846d; font-size: 0.72rem; }
+.lifecyclePanel header > span { flex: 0 0 auto; padding: 6px 9px; color: #d8bf82; border: 1px solid rgba(216, 179, 95, 0.2); border-radius: 999px; font-size: 0.66rem; }
+.releasedNotice { margin: 12px; padding: 12px; border: 1px solid rgba(119, 149, 188, 0.28); border-radius: 11px; background: rgba(35, 63, 93, 0.25); }
+.releasedNotice strong { color: #cfe4ff; }
+.releasedNotice p { margin: 4px 0; color: #aebed1; }
+.releasedNotice small { color: #7d91a9; }
+.lifecycleActions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; }
+.lifecycleActions button,
+.confirmModal button { min-height: 39px; padding: 7px 11px; color: #ead7b4; border: 1px solid rgba(216, 179, 95, 0.28); border-radius: 10px; background: linear-gradient(145deg, rgba(60, 41, 24, 0.95), rgba(20, 14, 10, 0.98)); }
+.lifecycleActions button:disabled,
+.confirmModal button:disabled { opacity: 0.45; cursor: not-allowed; }
+.releaseButton { color: #ffd8ae !important; border-color: rgba(212, 137, 64, 0.5) !important; background: rgba(109, 55, 23, 0.48) !important; }
+.deleteButton { color: #ffc2ba !important; border-color: rgba(199, 72, 58, 0.55) !important; background: rgba(108, 27, 21, 0.55) !important; }
+.inventoryBlockWarning { margin: 0; padding: 0 12px 13px; color: #d9aa72; font-size: 0.68rem; }
+.closedInventory { padding: 22px; color: #8d806c; text-align: center; }
+.closedInventory strong { color: #c4b18f; }
+.closedInventory p { margin: 5px 0 0; }
+.modalOverlay { position: fixed; inset: 0; z-index: 130; display: grid; place-items: center; padding: 18px; background: rgba(2, 2, 3, 0.86); backdrop-filter: blur(9px); }
+.confirmModal { width: min(620px, 95vw); overflow: hidden; border: 1px solid rgba(229, 197, 116, 0.47); border-radius: 17px; background: radial-gradient(circle at 50% -20%, rgba(216, 179, 95, 0.14), transparent 40%), linear-gradient(150deg, #25180f, #080706 72%); box-shadow: 0 34px 100px rgba(0, 0, 0, 0.72); }
+.confirmModal header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border-bottom: 1px solid rgba(216, 179, 95, 0.16); }
+.confirmModal header button { width: 38px; height: 38px; padding: 0; font-size: 1.25rem; }
+.confirmBody { display: grid; gap: 12px; padding: 14px; }
+.confirmBody p { margin: 0; color: #c4b59d; line-height: 1.65; }
+.confirmBody label { display: grid; gap: 5px; color: #a69375; font-size: 0.72rem; }
+.confirmBody input,
+.confirmBody textarea { width: 100%; color: #f1e2c8; border: 1px solid rgba(216, 179, 95, 0.25); border-radius: 9px; background: rgba(5, 4, 3, 0.72); }
+.confirmBody input { min-height: 40px; }
+.permanentWarning { padding: 11px; color: #ffc3ba !important; border: 1px solid rgba(190, 68, 53, 0.36); border-radius: 9px; background: rgba(103, 27, 20, 0.28); }
+.confirmModal footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 13px 14px; border-top: 1px solid rgba(216, 179, 95, 0.15); }
+@media (max-width: 700px) { .lifecyclePanel header { align-items: stretch; flex-direction: column; } .lifecyclePanel header > span { align-self: flex-start; } .confirmModal footer { grid-template-columns: 1fr; } }
