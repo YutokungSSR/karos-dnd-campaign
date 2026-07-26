@@ -260,6 +260,10 @@ export default function LiveSceneStage({
   const [uploadCategoryId, setUploadCategoryId] = useState("");
   const [uploading, setUploading] = useState(false);
   const [importingId, setImportingId] = useState<string | null>(null);
+  const [selectedAssetPreview, setSelectedAssetPreview] = useState<Asset | null>(
+    null
+  );
+  const [assetPreviewBusy, setAssetPreviewBusy] = useState(false);
 
   const viewerRef = useRef<HTMLDivElement | null>(null);
   const studioCanvasRef = useRef<HTMLDivElement | null>(null);
@@ -302,6 +306,28 @@ export default function LiveSceneStage({
       active = false;
     };
   }, [campaignId, userId]);
+
+  useEffect(() => {
+    if (!selectedAssetPreview) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape" && !assetPreviewBusy) {
+        setSelectedAssetPreview(null);
+      }
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [assetPreviewBusy, selectedAssetPreview]);
+
+  useEffect(() => {
+    if (!studioOpen) {
+      setSelectedAssetPreview(null);
+      setAssetPreviewBusy(false);
+    }
+  }, [studioOpen]);
 
   const assetById = useMemo(
     () => new Map(assets.map((asset) => [asset.id, asset])),
@@ -812,18 +838,31 @@ export default function LiveSceneStage({
     await loadStudio(id);
   }
 
-  async function updateScene(patch: Partial<Scene>) {
-    if (!selectedScene) return;
+  async function updateScene(patch: Partial<Scene>): Promise<boolean> {
+    if (!selectedScene) return false;
+
     setScenes((current) =>
       current.map((scene) =>
         scene.id === selectedScene.id ? { ...scene, ...patch } : scene
       )
     );
+
     const { error } = await getSupabase()
       .from("live_scenes")
-      .update({ ...patch, updated_by: userId, updated_at: new Date().toISOString() })
+      .update({
+        ...patch,
+        updated_by: userId,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", selectedScene.id);
-    if (error) setStudioMessage(error.message);
+
+    if (error) {
+      setStudioMessage(error.message);
+      await loadStudio(selectedScene.id);
+      return false;
+    }
+
+    return true;
   }
 
   async function deleteScene(scene: Scene) {
@@ -984,31 +1023,43 @@ export default function LiveSceneStage({
     }
   }
 
-  async function deleteAsset(asset: Asset) {
+  async function deleteAsset(asset: Asset): Promise<boolean> {
     const confirmed = window.confirm(
       `ลบรูป “${asset.name}” ถาวรหรือไม่?\n\nไฟล์จะถูกลบออกจาก Storage และไม่สามารถกู้คืนได้`
     );
-    if (!confirmed) return;
+    if (!confirmed) return false;
+
     const { data: storagePath, error } = await getSupabase().rpc(
       "delete_live_scene_asset",
       { target_asset: asset.id }
     );
-    if (error) return setStudioMessage(error.message);
+
+    if (error) {
+      setStudioMessage(error.message);
+      return false;
+    }
+
+    let storageWarning = "";
+
     if (storagePath) {
       const { error: storageError } = await getSupabase().storage
         .from("live-scene-assets")
         .remove([storagePath as string]);
       if (storageError) {
-        setStudioMessage(
-          `ลบข้อมูลรูปแล้ว แต่ลบไฟล์ Storage ไม่สำเร็จ: ${storageError.message}`
-        );
+        storageWarning = `ลบข้อมูลรูปแล้ว แต่ลบไฟล์ Storage ไม่สำเร็จ: ${storageError.message}`;
       }
     }
+
     await loadStudio();
+    if (storageWarning) {
+      setStudioMessage(storageWarning);
+    }
+    return true;
   }
 
-  async function addAssetToScene(asset: Asset) {
-    if (!selectedScene) return;
+  async function addAssetToScene(asset: Asset): Promise<boolean> {
+    if (!selectedScene) return false;
+
     const highestZ = selectedSceneObjects.reduce(
       (maximum, object) => Math.max(maximum, object.z_index),
       0
@@ -1039,9 +1090,30 @@ export default function LiveSceneStage({
     const { error } = await getSupabase()
       .from("live_scene_objects")
       .insert(newObject);
-    if (error) return setStudioMessage(error.message);
+
+    if (error) {
+      setStudioMessage(error.message);
+      return false;
+    }
+
     setObjects((current) => [...current, newObject]);
     setSelectedObjectId(newObject.id);
+    return true;
+  }
+
+  async function runAssetPreviewAction(action: () => Promise<boolean>) {
+    if (assetPreviewBusy) return;
+
+    setAssetPreviewBusy(true);
+
+    try {
+      const succeeded = await action();
+      if (succeeded) {
+        setSelectedAssetPreview(null);
+      }
+    } finally {
+      setAssetPreviewBusy(false);
+    }
   }
 
   function patchObject(objectId: string, patch: Partial<SceneObject>) {
@@ -1804,42 +1876,25 @@ export default function LiveSceneStage({
                       <div className={styles.assetGrid}>
                         {visibleAssets.map((asset) => (
                           <article className={styles.assetCard} key={asset.id}>
-                            <div>
-                              {asset.signed_url ? (
-                                <img src={asset.signed_url} alt={asset.name} />
-                              ) : (
-                                <span>ไม่มีภาพ</span>
-                              )}
-                            </div>
-                            <strong>{asset.name}</strong>
-                            <small>{asset.asset_type}</small>
-                            <div className={styles.assetCardActions}>
-                              <button
-                                type="button"
-                                onClick={() => addAssetToScene(asset)}
-                                disabled={!selectedScene}
-                              >
-                                + วางในฉาก
-                              </button>
-                              {asset.asset_type === "scene" ? (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    updateScene({ background_asset_id: asset.id })
-                                  }
-                                  disabled={!selectedScene}
-                                >
-                                  ใช้เป็นพื้นหลัง
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                className={styles.dangerButton}
-                                onClick={() => deleteAsset(asset)}
-                              >
-                                ลบถาวร
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              className={styles.assetPreviewButton}
+                              onClick={() => setSelectedAssetPreview(asset)}
+                              aria-label={`เปิดดูรูป ${asset.name}`}
+                            >
+                              <div>
+                                {asset.signed_url ? (
+                                  <img src={asset.signed_url} alt={asset.name} />
+                                ) : (
+                                  <span>ไม่มีภาพ</span>
+                                )}
+                              </div>
+                              <strong>{asset.name}</strong>
+                              <small>{asset.asset_type}</small>
+                              <span className={styles.assetOpenHint}>
+                                คลิกเพื่อดูและเลือกคำสั่ง
+                              </span>
+                            </button>
                           </article>
                         ))}
                       </div>
@@ -1970,6 +2025,101 @@ export default function LiveSceneStage({
               </div>
             )}
           </section>
+          {selectedAssetPreview ? (
+            <div
+              className={styles.assetPreviewOverlay}
+              role="dialog"
+              aria-modal="true"
+              aria-label={`ตัวอย่างรูป ${selectedAssetPreview.name}`}
+              onPointerDown={(event) => {
+                if (
+                  !assetPreviewBusy &&
+                  event.target === event.currentTarget
+                ) {
+                  setSelectedAssetPreview(null);
+                }
+              }}
+            >
+              <section className={styles.assetPreviewModal}>
+                <header className={styles.assetPreviewHeader}>
+                  <div>
+                    <p>ASSET PREVIEW</p>
+                    <h3>{selectedAssetPreview.name}</h3>
+                    <span>{selectedAssetPreview.asset_type}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.assetPreviewClose}
+                    onClick={() => setSelectedAssetPreview(null)}
+                    aria-label="ปิดหน้าต่างดูรูป"
+                    disabled={assetPreviewBusy}
+                  >
+                    ×
+                  </button>
+                </header>
+
+                <div className={styles.assetPreviewImage}>
+                  {selectedAssetPreview.signed_url ? (
+                    <img
+                      src={selectedAssetPreview.signed_url}
+                      alt={selectedAssetPreview.name}
+                    />
+                  ) : (
+                    <span>ไม่สามารถแสดงรูปนี้ได้</span>
+                  )}
+                </div>
+
+                <footer className={styles.assetPreviewActions}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void runAssetPreviewAction(() =>
+                        addAssetToScene(selectedAssetPreview)
+                      )
+                    }
+                    disabled={!selectedScene || assetPreviewBusy}
+                  >
+                    + วางในฉาก
+                  </button>
+
+                  {selectedAssetPreview.asset_type === "scene" ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void runAssetPreviewAction(() =>
+                          updateScene({
+                            background_asset_id: selectedAssetPreview.id,
+                          })
+                        )
+                      }
+                      disabled={!selectedScene || assetPreviewBusy}
+                    >
+                      ใช้เป็นพื้นหลัง
+                    </button>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className={styles.dangerButton}
+                    onClick={() =>
+                      void runAssetPreviewAction(() =>
+                        deleteAsset(selectedAssetPreview)
+                      )
+                    }
+                    disabled={assetPreviewBusy}
+                  >
+                    ลบถาวร
+                  </button>
+                </footer>
+
+                {!selectedScene ? (
+                  <p className={styles.assetPreviewNotice}>
+                    กรุณาสร้างหรือเลือกฉากก่อนใช้คำสั่งวางรูป
+                  </p>
+                ) : null}
+              </section>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </>
