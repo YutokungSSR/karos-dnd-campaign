@@ -65,7 +65,8 @@ export default function CampaignPage() {
       .from("characters")
       .select("*")
       .eq("campaign_id", id)
-      .order("updated_at", { ascending: false });
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
 
     if (error) {
       setMessage(error.message);
@@ -112,7 +113,8 @@ export default function CampaignPage() {
           .from("characters")
           .select("*")
           .eq("campaign_id", id)
-          .order("updated_at", { ascending: false }),
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true }),
         supabase
           .from("dice_rolls")
           .select("*,profiles(display_name)")
