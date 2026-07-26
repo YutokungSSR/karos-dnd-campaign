@@ -9,6 +9,7 @@ import CharacterInventory, {
 } from "@/components/CharacterInventory";
 import CharacterReadOnly from "@/components/CharacterReadOnly";
 import Loading from "@/components/Loading";
+import PetSystem from "@/components/PetSystem";
 import { useAuth } from "@/lib/useAuth";
 import { getSupabase } from "@/lib/supabase";
 
@@ -33,7 +34,9 @@ export default function CharacterPage() {
   const [inventoryReady, setInventoryReady] = useState(true);
   const [isDm, setIsDm] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [activeView, setActiveView] = useState<"status" | "inventory">("status");
+  const [activeView, setActiveView] = useState<
+    "status" | "inventory" | "pets"
+  >("status");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -117,6 +120,7 @@ export default function CharacterPage() {
 
   useEffect(() => {
     if (window.location.hash === "#inventory") setActiveView("inventory");
+    if (window.location.hash === "#pets") setActiveView("pets");
   }, []);
 
   useEffect(() => {
@@ -361,12 +365,11 @@ export default function CharacterPage() {
     );
   }
 
-  function changeView(view: "status" | "inventory") {
+  function changeView(view: "status" | "inventory" | "pets") {
     setActiveView(view);
-    const nextUrl =
-      view === "inventory"
-        ? `${window.location.pathname}${window.location.search}#inventory`
-        : `${window.location.pathname}${window.location.search}`;
+    const hash =
+      view === "inventory" ? "#inventory" : view === "pets" ? "#pets" : "";
+    const nextUrl = `${window.location.pathname}${window.location.search}${hash}`;
     window.history.replaceState(null, "", nextUrl);
   }
 
@@ -392,8 +395,13 @@ export default function CharacterPage() {
   const canEdit = character.owner_id === user?.id || isDm;
   const canViewInventory = character.owner_id === user?.id || isDm;
   const canExchange = character.owner_id === user?.id || isDm;
+  const canViewPets = character.owner_id === user?.id || isDm;
   const displayedView =
-    activeView === "inventory" && canViewInventory ? "inventory" : "status";
+    activeView === "inventory" && canViewInventory
+      ? "inventory"
+      : activeView === "pets" && canViewPets
+        ? "pets"
+        : "status";
 
   return (
     <main className="appShell wideShell">
@@ -469,6 +477,21 @@ export default function CharacterPage() {
             <b>
               {items.length}/{inventoryCapacity}
             </b>
+          </button>
+        ) : null}
+
+        {canViewPets ? (
+          <button
+            type="button"
+            className={displayedView === "pets" ? "active" : ""}
+            aria-pressed={displayedView === "pets"}
+            onClick={() => changeView("pets")}
+          >
+            <span>♞</span>
+            <div>
+              <small>Familiars</small>
+              <strong>สัตว์เลี้ยง</strong>
+            </div>
           </button>
         ) : null}
       </nav>
@@ -803,6 +826,20 @@ export default function CharacterPage() {
             onMessage={setMessage}
           />
         </>
+      ) : null}
+
+      {displayedView === "pets" && user ? (
+        <PetSystem
+          character={{
+            id: character.id,
+            name: character.name,
+            owner_id: character.owner_id,
+            campaign_id: character.campaign_id,
+          }}
+          viewerId={user.id}
+          isDm={isDm}
+          onMessage={setMessage}
+        />
       ) : null}
     </main>
   );
