@@ -142,6 +142,11 @@ type HeartParticle = {
   value: number;
 };
 
+type HeartOrigin = {
+  x: number;
+  y: number;
+};
+
 const STAT_KEYS = ["STR", "VIT", "AGI", "INT", "DEX", "WIS", "CHA"];
 
 const PET_TYPES = [
@@ -719,43 +724,86 @@ export default function PetSystem({
     }
   }
 
-  function spawnHearts(
-    event: MouseEvent<HTMLButtonElement>,
-    gained: number
-  ) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = clamp(event.clientX - rect.left, 30, rect.width - 30);
-    const y = clamp(event.clientY - rect.top, 40, rect.height - 30);
+  function spawnHearts(origin: HeartOrigin, gained: number) {
     const next = Array.from({ length: 5 }, (_, index) => ({
       id: crypto.randomUUID(),
-      x,
-      y,
+      x: origin.x,
+      y: origin.y,
       offset: (index - 2) * 24 + Math.round(Math.random() * 12 - 6),
       value: index === 2 ? gained : 0,
     }));
+
     setHearts((current) => [...current, ...next]);
+
     window.setTimeout(() => {
-      setHearts((current) => current.filter((heart) => !next.some((item) => item.id === heart.id)));
+      setHearts((current) =>
+        current.filter(
+          (heart) => !next.some((item) => item.id === heart.id)
+        )
+      );
     }, 1250);
   }
 
   async function tapPet(event: MouseEvent<HTMLButtonElement>) {
     if (!selectedPet || !canTap || busy) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const clientX =
+      event.clientX > 0 ? event.clientX : rect.left + rect.width / 2;
+    const clientY =
+      event.clientY > 0 ? event.clientY : rect.top + rect.height / 2;
+
+    const heartOrigin: HeartOrigin = {
+      x: clamp(clientX - rect.left, 30, Math.max(30, rect.width - 30)),
+      y: clamp(clientY - rect.top, 40, Math.max(40, rect.height - 30)),
+    };
+
+    const resetRemaining = tapStatus?.reset_at
+      ? new Date(tapStatus.reset_at).getTime() - Date.now()
+      : 0;
+    const used = tapStatus?.used ?? 0;
+    const limit = tapStatus?.limit ?? selectedPet.tap_limit;
+
+    if (
+      selectedPet.relationship_points >= selectedPet.relationship_max
+    ) {
+      onMessage("ค่าความสัมพันธ์เต็มแล้ว");
+      return;
+    }
+
+    if (used >= limit && resetRemaining > 0) {
+      onMessage(
+        `สัตว์เลี้ยงต้องการพักผ่อน กรุณารออีก ${formatRemaining(
+          resetRemaining
+        )}`
+      );
+      return;
+    }
+
     setBusy(true);
     onMessage("");
+
     try {
-      const { data, error } = await getSupabase().rpc("tap_pet_relationship", {
-        target_pet: selectedPet.id,
-      });
+      const { data, error } = await getSupabase().rpc(
+        "tap_pet_relationship",
+        {
+          target_pet: selectedPet.id,
+        }
+      );
+
       if (error) throw error;
+
       const result = data as TapStatus & { gained: number };
-      spawnHearts(event, result.gained);
+      spawnHearts(heartOrigin, result.gained);
       emitSound("success");
       setTapStatus(result);
       setPets((current) =>
         current.map((pet) =>
           pet.id === selectedPet.id
-            ? { ...pet, relationship_points: result.relationship_points }
+            ? {
+                ...pet,
+                relationship_points: result.relationship_points,
+              }
             : pet
         )
       );
@@ -967,6 +1015,12 @@ export default function PetSystem({
     0,
     100
   );
+  const relationshipFull = relationshipPoints >= relationshipMax;
+  const tapWindowReady = resetMilliseconds <= 0;
+  const canTapNow =
+    canTap &&
+    !relationshipFull &&
+    (tapsRemaining > 0 || tapWindowReady);
   const imageUrl = selectedForm?.image_path
     ? signedImages[selectedForm.image_path]
     : "";
@@ -1071,11 +1125,13 @@ export default function PetSystem({
               <div className={styles.petHeroGrid}>
                 <button
                   type="button"
-                  className={`${styles.petPortrait} ${canTap ? styles.tappable : ""}`}
+                  className={`${styles.petPortrait} ${
+                    canTapNow ? styles.tappable : ""
+                  }`}
                   onClick={tapPet}
-                  disabled={!canTap || busy}
+                  disabled={!canTapNow || busy}
                   aria-label={
-                    canTap
+                    canTapNow
                       ? `แตะ ${selectedPet.name} เพื่อเพิ่มค่าความสัมพันธ์`
                       : `รูปสัตว์เลี้ยง ${selectedPet.name}`
                   }
@@ -1091,7 +1147,7 @@ export default function PetSystem({
                     <h3>{selectedPet.name}</h3>
                     <p>{selectedPet.title || selectedPet.species || selectedPet.pet_type}</p>
                   </div>
-                  {canTap ? (
+                  {canTapNow ? (
                     <span className={styles.tapHint}>แตะรูปเพื่อสร้างความสัมพันธ์</span>
                   ) : null}
                   {hearts.map((heart) => (
@@ -1140,12 +1196,30 @@ export default function PetSystem({
                       <i style={{ width: `${relationshipPercent}%` }} />
                     </div>
                     <div className={styles.tapStatusLine}>
-                      <span>แตะได้อีก {tapsRemaining} ครั้ง</span>
-                      <span>
-                        {tapsRemaining > 0
-                          ? `สุ่ม +${selectedPet.tap_min_points} ถึง +${selectedPet.tap_max_points}`
-                          : `พักอีก ${formatRemaining(resetMilliseconds)}`}
-                      </span>
+                      {relationshipFull ? (
+                        <>
+                          <span>ค่าความสัมพันธ์เต็มแล้ว</span>
+                          <span>รอเส้นทางวิวัฒนาการ</span>
+                        </>
+                      ) : tapsRemaining > 0 ? (
+                        <>
+                          <span>แตะได้อีก {tapsRemaining} ครั้ง</span>
+                          <span>
+                            สุ่ม +{selectedPet.tap_min_points} ถึง +
+                            {selectedPet.tap_max_points}
+                          </span>
+                        </>
+                      ) : resetMilliseconds > 0 ? (
+                        <>
+                          <span>สัตว์เลี้ยงกำลังพักผ่อน</span>
+                          <span>พร้อมอีกครั้งใน {formatRemaining(resetMilliseconds)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>พร้อมสร้างความสัมพันธ์อีกครั้ง</span>
+                          <span>แตะรูปเพื่อเริ่มรอบใหม่</span>
+                        </>
+                      )}
                     </div>
                   </div>
 
