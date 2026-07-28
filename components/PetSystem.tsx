@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { getSupabase } from "@/lib/supabase";
+import PetPhase2 from "./PetPhase2";
 import styles from "./PetSystem.module.css";
 
 type PetStatus =
@@ -18,6 +19,7 @@ type PetStatus =
   | "approved"
   | "rejected"
   | "suspended";
+  | "released";
 
 type CharacterSummary = {
   id: string;
@@ -181,6 +183,7 @@ const STATUS_LABELS: Record<PetStatus, string> = {
   approved: "อนุมัติแล้ว",
   rejected: "ถูกปฏิเสธ",
   suspended: "ถูกระงับ",
+  released: "ถูกปล่อยแล้ว",
 };
 
 function numberValue(value: unknown, fallback = 0) {
@@ -452,9 +455,12 @@ export default function PetSystem({
   );
 
   const occupiedPetSlots = useMemo(
-    () => pets.filter((pet) => pet.status !== "rejected").length,
-    [pets]
-  );
+    () =>
+    pets.filter(
+      (pet) => pet.status !== "rejected" && pet.status !== "released"
+    ).length,
+  [pets]
+);
 
   const canCreate = isOwner && occupiedPetSlots < settings.max_pets;
   const canTap =
@@ -1561,13 +1567,28 @@ export default function PetSystem({
                 </section>
               ) : null}
 
-              <section className={styles.nextPhase}>
-                <span>PHASE 2</span>
-                <div>
-                  <strong>อุปกรณ์ · กระเป๋า · เส้นทางวิวัฒนาการ</strong>
-                  <p>ฐานข้อมูลรองรับร่างวิวัฒนาการและ Event แล้ว ส่วน UI คลัง อุปกรณ์ และคัทซีนจะต่อในแพ็กถัดไป</p>
-                </div>
-              </section>
+           <PetPhase2
+  petId={selectedPet.id}
+  petName={selectedPet.name}
+  petStatus={selectedPet.status}
+  characterId={character.id}
+  characterName={character.name}
+  isOwner={isOwner}
+  isDm={isDm}
+  onMessage={onMessage}
+  onChanged={load}
+/>
+
+<section className={styles.nextPhase}>
+  <span>PHASE 3</span>
+  <div>
+    <strong>เส้นทางวิวัฒนาการ · การย้อนร่าง · คัทซีน</strong>
+    <p>
+      Phase ถัดไปจะเพิ่มแผนผังวิวัฒนาการหลายเส้นทาง การย้อนร่างโดย DM
+      และคัทซีนพร้อมเสียงเอฟเฟกต์
+    </p>
+  </div>
+</section>
             </>
           ) : (
             <div className={styles.noSelection}>
