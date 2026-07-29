@@ -129,7 +129,23 @@
 .status_pending { color: #f0d487; border-color: rgba(216, 179, 95, 0.38); background: rgba(146, 99, 35, 0.14); }
 .status_revision { color: #ffc986; border-color: rgba(224, 146, 55, 0.42); background: rgba(137, 68, 25, 0.16); }
 .status_approved { color: #bdeba9; border-color: rgba(108, 180, 85, 0.42); background: rgba(54, 112, 42, 0.16); }
-.status_rejected, .status_suspended { color: #ffb4aa; border-color: rgba(194, 75, 59, 0.42); background: rgba(116, 34, 25, 0.18); }
+.status_rejected {
+  color: #ffaaa0;
+  border-color: rgba(194, 75, 59, 0.46);
+  background: rgba(116, 34, 25, 0.2);
+}
+
+.status_suspended {
+  color: #ffc47d;
+  border-color: rgba(211, 135, 47, 0.46);
+  background: rgba(126, 73, 25, 0.2);
+}
+
+.status_released {
+  color: #b8c7d9;
+  border-color: rgba(126, 153, 181, 0.46);
+  background: rgba(49, 67, 86, 0.24);
+}
 .infoGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
 .infoGrid > div { min-width: 0; padding: 9px; border: 1px solid rgba(216, 179, 95, 0.12); border-radius: 9px; background: rgba(255, 255, 255, 0.018); }
 .infoGrid small { display: block; color: #8c7b62; font-size: 0.62rem; }

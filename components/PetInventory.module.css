@@ -1,0 +1,106 @@
+.inventoryPanel {
+  overflow: hidden;
+  margin-top: 14px;
+  border: 1px solid rgba(216, 179, 95, 0.25);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 16% 0%, rgba(216, 179, 95, 0.08), transparent 30%),
+    linear-gradient(145deg, rgba(31, 21, 14, 0.94), rgba(8, 7, 6, 0.98));
+}
+
+.inventoryPanel button {
+  color: #ead7b4;
+  border: 1px solid rgba(216, 179, 95, 0.27);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(58, 39, 23, 0.94), rgba(20, 14, 10, 0.98));
+}
+
+.inventoryPanel button:hover:not(:disabled) {
+  border-color: rgba(246, 218, 146, 0.7);
+  filter: brightness(1.08);
+}
+
+.inventoryPanel button:disabled { opacity: 0.44; cursor: not-allowed; }
+.loadingSeal { width: 58px; height: 58px; display: grid; place-items: center; margin: 48px auto 8px; color: #e1bd68; border: 1px solid rgba(216, 179, 95, 0.3); border-radius: 50%; font-size: 1.8rem; animation: petInventoryOrbit 2.8s linear infinite; }
+.inventoryPanel > p { padding-bottom: 40px; color: #9e8c70; text-align: center; }
+.inventoryHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px; border-bottom: 1px solid rgba(216, 179, 95, 0.16); }
+.inventoryHeader small, .sectionTitle small, .settingsHeading small, .itemModal header small { color: #ae8b45; font-size: 0.59rem; font-weight: 900; letter-spacing: 0.18em; }
+.inventoryHeader h3 { margin: 3px 0; color: #f5e3c2; font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.2rem, 2.3vw, 1.75rem); }
+.inventoryHeader p { margin: 0; color: #9a8a71; font-size: 0.76rem; }
+.capacityBadges { display: grid; gap: 6px; flex: 0 0 auto; }
+.capacityBadges span { padding: 5px 9px; color: #d7bf84; border: 1px solid rgba(216, 179, 95, 0.2); border-radius: 999px; background: rgba(216, 179, 95, 0.055); font-size: 0.67rem; text-align: center; }
+.dmSettings { display: grid; gap: 10px; margin: 12px; padding: 12px; border: 1px solid rgba(216, 179, 95, 0.2); border-radius: 13px; background: rgba(216, 179, 95, 0.035); }
+.settingsHeading { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+.settingsHeading > div { display: grid; }
+.settingsHeading strong { color: #e4c980; }
+.settingsHeading label { display: grid; gap: 3px; color: #99866a; font-size: 0.66rem; }
+.settingsHeading input { width: 110px; }
+.slotToggles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.slotToggles label { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 7px; color: #cdbb9b; border: 1px solid rgba(216, 179, 95, 0.13); border-radius: 9px; background: rgba(255, 255, 255, 0.018); font-size: 0.69rem; }
+.dmSettings > button { min-height: 38px; justify-self: end; padding: 7px 12px; }
+.categoryTabs { display: flex; gap: 6px; padding: 0 12px 12px; overflow-x: auto; }
+.categoryTabs button { min-width: max-content; padding: 7px 10px; background: rgba(255, 255, 255, 0.018); }
+.categoryTabs button.active { color: #fff0c8; border-color: rgba(240, 209, 131, 0.65); background: rgba(113, 76, 37, 0.52); }
+.inventoryLayout { display: grid; grid-template-columns: minmax(340px, 0.92fr) minmax(440px, 1.08fr); min-height: 620px; border-top: 1px solid rgba(216, 179, 95, 0.14); }
+.equipmentPane, .bagPane { min-width: 0; padding: 14px; }
+.equipmentPane { border-right: 1px solid rgba(216, 179, 95, 0.14); background: radial-gradient(circle at center, rgba(216, 179, 95, 0.07), transparent 47%), rgba(6, 5, 4, 0.25); }
+.sectionTitle { display: grid; margin-bottom: 10px; }
+.sectionTitle strong { color: #dfcfb2; }
+.equipmentBoard { position: relative; width: min(100%, 480px); height: 540px; margin: 0 auto; border: 1px solid rgba(216, 179, 95, 0.16); border-radius: 46% 46% 22px 22px / 18% 18% 22px 22px; background: repeating-radial-gradient(circle at center, transparent 0 68px, rgba(216, 179, 95, 0.04) 69px 70px), linear-gradient(155deg, rgba(37, 25, 16, 0.78), rgba(7, 6, 5, 0.9)); }
+.petSilhouette { position: absolute; inset: 78px 115px; display: grid; place-items: center; color: rgba(216, 179, 95, 0.13); border: 1px solid rgba(216, 179, 95, 0.1); border-radius: 46% 46% 24% 24%; font-size: 9rem; }
+.equipmentSlot { position: absolute; width: 94px; min-height: 91px; display: grid; place-items: center; gap: 2px; padding: 5px; text-align: center; background: rgba(12, 9, 7, 0.88) !important; }
+.equipmentSlot small { color: #927e5e; font-size: 0.56rem; }
+.equipmentSlot strong { width: 100%; overflow: hidden; color: #dfcfb2; font-size: 0.66rem; text-overflow: ellipsis; white-space: nowrap; }
+.equipmentSlot > span:not(.itemImage) { color: #b8944b; font-size: 1.4rem; }
+.equipmentSlot em { color: #776b59; font-size: 0.58rem; font-style: normal; }
+.disabledSlot { border-style: dashed !important; filter: grayscale(1); }
+.slot_head { top: 15px; left: 50%; transform: translateX(-50%); }
+.slot_neck { top: 122px; right: 20px; }
+.slot_chest { top: 122px; left: 20px; }
+.slot_ring { top: 230px; right: 10px; }
+.slot_legs { top: 230px; left: 10px; }
+.slot_feet { bottom: 18px; left: 50%; transform: translateX(-50%); }
+.slot_left_hand { bottom: 116px; left: 23px; }
+.slot_right_hand { right: 23px; bottom: 116px; }
+.itemImage { width: 43px; height: 43px; display: grid; place-items: center; overflow: hidden; color: #c49e50; border: 1px solid rgba(216, 179, 95, 0.19); border-radius: 8px; background: #0a0806; font-size: 1.2rem; }
+.itemImage img { width: 100%; height: 100%; object-fit: cover; }
+.bagGrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
+.bagSlot { position: relative; min-width: 0; min-height: 107px; display: grid; place-items: center; gap: 2px; padding: 6px; background: rgba(255, 255, 255, 0.016) !important; }
+.bagSlot > small { position: absolute; top: 4px; left: 6px; color: #655b4c; font-size: 0.54rem; }
+.bagSlot > span:not(.itemImage) { color: #5c5040; font-size: 1.3rem; }
+.bagSlot strong { width: 100%; overflow: hidden; color: #d9c9ad; font-size: 0.65rem; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.bagSlot > b { position: absolute; right: 5px; bottom: 4px; color: #f1d78f; font-size: 0.6rem; }
+.bagSlot > em { color: #a8d28f; font-size: 0.53rem; font-style: normal; }
+.filteredSummary { margin-top: 8px; color: #746958; font-size: 0.62rem; text-align: right; }
+.characterTransferPane { padding: 15px; border-top: 1px solid rgba(216, 179, 95, 0.15); background: rgba(5, 4, 3, 0.27); }
+.transferNotice { margin: -4px 0 10px; color: #8f806c; font-size: 0.69rem; }
+.transferGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.transferCard { min-width: 0; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px; text-align: left; background: rgba(255, 255, 255, 0.018) !important; }
+.transferCard > span:not(.itemImage) { min-width: 0; display: grid; }
+.transferCard strong { overflow: hidden; color: #dfcfb2; text-overflow: ellipsis; white-space: nowrap; }
+.transferCard small { color: #82735d; font-size: 0.6rem; }
+.transferCard > b { color: #cba85a; font-size: 0.62rem; }
+.emptyState { grid-column: 1 / -1; padding: 26px; color: #81735e; border: 1px dashed rgba(216, 179, 95, 0.16); border-radius: 10px; text-align: center; }
+.modalOverlay { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 18px; background: rgba(2, 2, 3, 0.84); backdrop-filter: blur(9px); }
+.itemModal { width: min(760px, 95vw); max-height: 92vh; overflow-y: auto; border: 1px solid rgba(229, 197, 116, 0.49); border-radius: 17px; background: radial-gradient(circle at 50% -20%, rgba(216, 179, 95, 0.14), transparent 38%), linear-gradient(150deg, #25180f, #080706 70%); box-shadow: 0 34px 100px rgba(0, 0, 0, 0.7); }
+.itemModal header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border-bottom: 1px solid rgba(216, 179, 95, 0.16); }
+.itemModal header > div { min-width: 0; display: grid; }
+.itemModal h4 { margin: 2px 0; color: #f3e3c5; font-family: Georgia, "Times New Roman", serif; font-size: 1.35rem; }
+.itemModal header span { color: #8e806b; font-size: 0.68rem; }
+.itemModal header button { width: 38px; height: 38px; padding: 0; font-size: 1.25rem; }
+.modalBody { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; padding: 14px; }
+.modalArtwork { min-height: 230px; display: grid; place-items: center; border: 1px solid rgba(216, 179, 95, 0.15); border-radius: 13px; background: #070605; }
+.modalArtwork .itemImage { width: min(190px, 80%); height: min(190px, 80%); font-size: 4rem; }
+.modalInfo p { min-height: 88px; margin-top: 0; color: #c7b79d; line-height: 1.65; }
+.modalInfo dl { display: grid; gap: 6px; }
+.modalInfo dl > div { display: flex; justify-content: space-between; gap: 12px; padding: 8px; border: 1px solid rgba(216, 179, 95, 0.1); border-radius: 8px; }
+.modalInfo dt { color: #88785f; }
+.modalInfo dd { margin: 0; color: #dfcfb3; text-align: right; }
+.modalActions { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 7px; padding: 13px 14px; border-top: 1px solid rgba(216, 179, 95, 0.15); }
+.modalActions button { min-height: 40px; padding: 7px 9px; }
+.returnButton { color: #cbe4ff !important; border-color: rgba(92, 145, 198, 0.42) !important; background: rgba(31, 68, 105, 0.45) !important; }
+.readOnlyNotice { margin: 0; padding: 0 14px 13px; color: #b99d69; font-size: 0.68rem; text-align: center; }
+@keyframes petInventoryOrbit { to { transform: rotate(360deg); } }
+@media (max-width: 1050px) { .inventoryLayout { grid-template-columns: 1fr; } .equipmentPane { border-right: 0; border-bottom: 1px solid rgba(216, 179, 95, 0.14); } .transferGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .inventoryHeader, .settingsHeading { align-items: stretch; flex-direction: column; } .capacityBadges { grid-template-columns: repeat(2, minmax(0, 1fr)); } .slotToggles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .equipmentBoard { height: 500px; } .equipmentSlot { width: 82px; } .petSilhouette { inset: 92px 90px; } .bagGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .transferGrid { grid-template-columns: 1fr; } .modalBody { grid-template-columns: 1fr; } .modalArtwork { min-height: 190px; } }
+@media (prefers-reduced-motion: reduce) { .loadingSeal { animation: none; } }

@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { getSupabase } from "@/lib/supabase";
+import PetPhase2 from "./PetPhase2";
 import styles from "./PetSystem.module.css";
 
 type PetStatus =
@@ -17,7 +18,8 @@ type PetStatus =
   | "revision"
   | "approved"
   | "rejected"
-  | "suspended";
+  | "suspended"
+  | "released";
 
 type CharacterSummary = {
   id: string;
@@ -181,6 +183,7 @@ const STATUS_LABELS: Record<PetStatus, string> = {
   approved: "อนุมัติแล้ว",
   rejected: "ถูกปฏิเสธ",
   suspended: "ถูกระงับ",
+  released: "ถูกปล่อยแล้ว",
 };
 
 function numberValue(value: unknown, fallback = 0) {
@@ -401,6 +404,34 @@ export default function PetSystem({
   }, [load]);
 
   useEffect(() => {
+    if (!isDm) return;
+
+    async function retryPendingImageCleanup() {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc(
+        "get_pending_pet_image_cleanup"
+      );
+      if (error || !Array.isArray(data)) return;
+
+      const imagePaths = data.filter(
+        (path): path is string => typeof path === "string" && path.length > 0
+      );
+      if (!imagePaths.length) return;
+
+      const { error: storageError } = await supabase.storage
+        .from("pet-images")
+        .remove(imagePaths);
+      if (storageError) return;
+
+      await supabase.rpc("complete_pet_image_cleanup", {
+        object_names: imagePaths,
+      });
+    }
+
+    void retryPendingImageCleanup();
+  }, [isDm]);
+
+  useEffect(() => {
     if (!character.id) return;
     const supabase = getSupabase();
     const channel = supabase
@@ -452,9 +483,12 @@ export default function PetSystem({
   );
 
   const occupiedPetSlots = useMemo(
-    () => pets.filter((pet) => pet.status !== "rejected").length,
-    [pets]
-  );
+    () =>
+    pets.filter(
+      (pet) => pet.status !== "rejected" && pet.status !== "released"
+    ).length,
+  [pets]
+);
 
   const canCreate = isOwner && occupiedPetSlots < settings.max_pets;
   const canTap =
@@ -1561,11 +1595,27 @@ export default function PetSystem({
                 </section>
               ) : null}
 
+              <PetPhase2
+                key={selectedPet.id}
+                petId={selectedPet.id}
+                petName={selectedPet.name}
+                petStatus={selectedPet.status}
+                characterId={character.id}
+                characterName={character.name}
+                isOwner={isOwner}
+                isDm={isDm}
+                onMessage={onMessage}
+                onChanged={load}
+              />
+
               <section className={styles.nextPhase}>
-                <span>PHASE 2</span>
+                <span>PHASE 3</span>
                 <div>
-                  <strong>อุปกรณ์ · กระเป๋า · เส้นทางวิวัฒนาการ</strong>
-                  <p>ฐานข้อมูลรองรับร่างวิวัฒนาการและ Event แล้ว ส่วน UI คลัง อุปกรณ์ และคัทซีนจะต่อในแพ็กถัดไป</p>
+                  <strong>เส้นทางวิวัฒนาการ · การย้อนร่าง · คัทซีน</strong>
+                  <p>
+                    Phase ถัดไปจะเพิ่มแผนผังวิวัฒนาการหลายเส้นทาง
+                    การย้อนร่างโดย DM และคัทซีนพร้อมเสียงเอฟเฟกต์
+                  </p>
                 </div>
               </section>
             </>
