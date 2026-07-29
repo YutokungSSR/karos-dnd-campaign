@@ -119,10 +119,13 @@ create table if not exists public.pet_image_cleanup_authorizations (
   object_name text not null,
   authorized_user uuid not null references public.profiles(id) on delete cascade,
   created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '1 day'),
   primary key (object_name, authorized_user)
 );
 create index if not exists pet_image_cleanup_authorizations_created_idx
   on public.pet_image_cleanup_authorizations(created_at);
+create index if not exists pet_image_cleanup_authorizations_user_expiry_idx
+  on public.pet_image_cleanup_authorizations(authorized_user, expires_at);
 
 create or replace function private.pet_has_image_cleanup_authorization(target_object_name text)
 returns boolean
@@ -136,6 +139,7 @@ as $$
     from public.pet_image_cleanup_authorizations authorization
     where authorization.object_name = target_object_name
       and authorization.authorized_user = (select auth.uid())
+      and authorization.expires_at > now()
   );
 $$;
 
@@ -235,6 +239,39 @@ grant select, insert, update, delete on table public.pet_inventory_items to serv
 
 revoke all on table public.pet_image_cleanup_authorizations from anon, authenticated;
 grant select, insert, update, delete on table public.pet_image_cleanup_authorizations to service_role;
+
+create index if not exists pet_inventory_items_image_path_idx
+  on public.pet_inventory_items(image_path)
+  where image_path is not null;
+create index if not exists inventory_items_image_path_idx
+  on public.inventory_items(image_path)
+  where image_path is not null;
+
+-- An inventory image cannot be removed while either a character item or a pet
+-- item still references it.
+drop policy if exists "inventory images deleted by owner and dm" on storage.objects;
+create policy "inventory images deleted by owner and dm"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'inventory-item-images'
+  and (
+    select private.can_view_character_inventory(
+      private.inventory_character_id_from_path(storage.objects.name)
+    )
+  )
+  and not exists (
+    select 1
+    from public.inventory_items item
+    where item.image_path = storage.objects.name
+  )
+  and not exists (
+    select 1
+    from public.pet_inventory_items item
+    where item.image_path = storage.objects.name
+  )
+);
 
 create or replace function public.configure_pet_inventory(
   target_pet uuid,
@@ -772,19 +809,27 @@ begin
     raise exception using errcode = '22023', message = 'ต้องย้ายไอเทมออกจากสัตว์เลี้ยงให้หมดก่อนลบ';
   end if;
 
-  select coalesce(jsonb_agg(form.image_path order by form.created_at, form.id), '[]'::jsonb)
+  select coalesce(
+    jsonb_agg(image.image_path order by image.first_created_at, image.image_path),
+    '[]'::jsonb
+  )
   into image_paths
-  from public.pet_forms form
-  where form.pet_id = target_pet
-    and trim(form.image_path) <> '';
+  from (
+    select form.image_path, min(form.created_at) as first_created_at
+    from public.pet_forms form
+    where form.pet_id = target_pet
+      and trim(form.image_path) <> ''
+    group by form.image_path
+  ) image;
 
   insert into public.pet_image_cleanup_authorizations(object_name, authorized_user)
-  select form.image_path, (select auth.uid())
+  select distinct form.image_path, (select auth.uid())
   from public.pet_forms form
   where form.pet_id = target_pet
     and trim(form.image_path) <> ''
   on conflict (object_name, authorized_user) do update
-  set created_at = now();
+  set created_at = now(),
+      expires_at = now() + interval '1 day';
 
   delete from public.pets where id = target_pet;
   return image_paths;
@@ -812,6 +857,22 @@ begin
   get diagnostics deleted_count = row_count;
   return deleted_count;
 end;
+$$;
+
+create or replace function public.get_pending_pet_image_cleanup()
+returns text[]
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    array_agg(authorization.object_name order by authorization.object_name),
+    array[]::text[]
+  )
+  from public.pet_image_cleanup_authorizations authorization
+  where authorization.authorized_user = (select auth.uid())
+    and authorization.expires_at > now();
 $$;
 
 -- Released pets no longer consume the per-character pet limit.
@@ -943,6 +1004,7 @@ revoke all on function public.release_pet(uuid, text, text) from public, anon;
 revoke all on function public.restore_released_pet(uuid, text) from public, anon;
 revoke all on function public.delete_pet_permanently(uuid, text) from public, anon;
 revoke all on function public.complete_pet_image_cleanup(text[]) from public, anon;
+revoke all on function public.get_pending_pet_image_cleanup() from public, anon;
 
 grant execute on function public.configure_pet_inventory(uuid, integer, jsonb) to authenticated;
 grant execute on function public.move_character_item_to_pet(uuid, uuid, integer) to authenticated;
@@ -953,6 +1015,7 @@ grant execute on function public.release_pet(uuid, text, text) to authenticated;
 grant execute on function public.restore_released_pet(uuid, text) to authenticated;
 grant execute on function public.delete_pet_permanently(uuid, text) to authenticated;
 grant execute on function public.complete_pet_image_cleanup(text[]) to authenticated;
+grant execute on function public.get_pending_pet_image_cleanup() to authenticated;
 
 -- Keep existing pet image deletion rules and add one-time DM cleanup authorization
 -- for images belonging to a pet that has already been deleted from public.pets.

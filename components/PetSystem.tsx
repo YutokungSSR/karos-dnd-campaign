@@ -18,7 +18,7 @@ type PetStatus =
   | "revision"
   | "approved"
   | "rejected"
-  | "suspended";
+  | "suspended"
   | "released";
 
 type CharacterSummary = {
@@ -402,6 +402,34 @@ export default function PetSystem({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!isDm) return;
+
+    async function retryPendingImageCleanup() {
+      const supabase = getSupabase();
+      const { data, error } = await supabase.rpc(
+        "get_pending_pet_image_cleanup"
+      );
+      if (error || !Array.isArray(data)) return;
+
+      const imagePaths = data.filter(
+        (path): path is string => typeof path === "string" && path.length > 0
+      );
+      if (!imagePaths.length) return;
+
+      const { error: storageError } = await supabase.storage
+        .from("pet-images")
+        .remove(imagePaths);
+      if (storageError) return;
+
+      await supabase.rpc("complete_pet_image_cleanup", {
+        object_names: imagePaths,
+      });
+    }
+
+    void retryPendingImageCleanup();
+  }, [isDm]);
 
   useEffect(() => {
     if (!character.id) return;
@@ -1567,28 +1595,29 @@ export default function PetSystem({
                 </section>
               ) : null}
 
-           <PetPhase2
-  petId={selectedPet.id}
-  petName={selectedPet.name}
-  petStatus={selectedPet.status}
-  characterId={character.id}
-  characterName={character.name}
-  isOwner={isOwner}
-  isDm={isDm}
-  onMessage={onMessage}
-  onChanged={load}
-/>
+              <PetPhase2
+                key={selectedPet.id}
+                petId={selectedPet.id}
+                petName={selectedPet.name}
+                petStatus={selectedPet.status}
+                characterId={character.id}
+                characterName={character.name}
+                isOwner={isOwner}
+                isDm={isDm}
+                onMessage={onMessage}
+                onChanged={load}
+              />
 
-<section className={styles.nextPhase}>
-  <span>PHASE 3</span>
-  <div>
-    <strong>เส้นทางวิวัฒนาการ · การย้อนร่าง · คัทซีน</strong>
-    <p>
-      Phase ถัดไปจะเพิ่มแผนผังวิวัฒนาการหลายเส้นทาง การย้อนร่างโดย DM
-      และคัทซีนพร้อมเสียงเอฟเฟกต์
-    </p>
-  </div>
-</section>
+              <section className={styles.nextPhase}>
+                <span>PHASE 3</span>
+                <div>
+                  <strong>เส้นทางวิวัฒนาการ · การย้อนร่าง · คัทซีน</strong>
+                  <p>
+                    Phase ถัดไปจะเพิ่มแผนผังวิวัฒนาการหลายเส้นทาง
+                    การย้อนร่างโดย DM และคัทซีนพร้อมเสียงเอฟเฟกต์
+                  </p>
+                </div>
+              </section>
             </>
           ) : (
             <div className={styles.noSelection}>
