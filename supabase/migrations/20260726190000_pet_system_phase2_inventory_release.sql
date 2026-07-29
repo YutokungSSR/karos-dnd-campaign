@@ -36,13 +36,13 @@ as $$
   select (select auth.uid()) is not null
     and exists (
       select 1
-      from public.characters character
-      where character.id = target_character
+      from public.characters character_row
+      where character_row.id = target_character
         and (
-          character.owner_id = (select auth.uid())
+          character_row.owner_id = (select auth.uid())
           or (
-            character.campaign_id is not null
-            and private.pet_can_manage_campaign(character.campaign_id)
+            character_row.campaign_id is not null
+            and private.pet_can_manage_campaign(character_row.campaign_id)
           )
         )
     );
@@ -58,10 +58,10 @@ as $$
   select (select auth.uid()) is not null
     and exists (
       select 1
-      from public.characters character
-      where character.id = target_character
-        and character.campaign_id is not null
-        and private.pet_can_manage_campaign(character.campaign_id)
+      from public.characters character_row
+      where character_row.id = target_character
+        and character_row.campaign_id is not null
+        and private.pet_can_manage_campaign(character_row.campaign_id)
     );
 $$;
 
@@ -136,10 +136,10 @@ set search_path = ''
 as $$
   select exists (
     select 1
-    from public.pet_image_cleanup_authorizations authorization
-    where authorization.object_name = target_object_name
-      and authorization.authorized_user = (select auth.uid())
-      and authorization.expires_at > now()
+    from public.pet_image_cleanup_authorizations cleanup_auth
+    where cleanup_auth.object_name = target_object_name
+      and cleanup_auth.authorized_user = (select auth.uid())
+      and cleanup_auth.expires_at > now()
   );
 $$;
 
@@ -321,7 +321,9 @@ begin
     'right_hand', coalesce((enabled_slots->>'right_hand')::boolean, true)
   );
 
-  set constraints public.pet_inventory_items_pet_slot_unique deferred;
+  perform pg_catalog.set_config('search_path', 'public', true);
+  set constraints pet_inventory_items_pet_slot_unique deferred;
+  perform pg_catalog.set_config('search_path', '', true);
 
   with ranked_items as (
     select item.id,
@@ -850,9 +852,9 @@ begin
     raise exception using errcode = '42501', message = 'กรุณาเข้าสู่ระบบ';
   end if;
 
-  delete from public.pet_image_cleanup_authorizations authorization
-  where authorization.authorized_user = (select auth.uid())
-    and authorization.object_name = any(coalesce(object_names, array[]::text[]));
+  delete from public.pet_image_cleanup_authorizations cleanup_auth
+  where cleanup_auth.authorized_user = (select auth.uid())
+    and cleanup_auth.object_name = any(coalesce(object_names, array[]::text[]));
 
   get diagnostics deleted_count = row_count;
   return deleted_count;
@@ -867,12 +869,12 @@ security definer
 set search_path = ''
 as $$
   select coalesce(
-    array_agg(authorization.object_name order by authorization.object_name),
+    array_agg(cleanup_auth.object_name order by cleanup_auth.object_name),
     array[]::text[]
   )
-  from public.pet_image_cleanup_authorizations authorization
-  where authorization.authorized_user = (select auth.uid())
-    and authorization.expires_at > now();
+  from public.pet_image_cleanup_authorizations cleanup_auth
+  where cleanup_auth.authorized_user = (select auth.uid())
+    and cleanup_auth.expires_at > now();
 $$;
 
 -- Released pets no longer consume the per-character pet limit.
@@ -907,10 +909,10 @@ begin
     raise exception using errcode = '42501', message = 'เฉพาะเจ้าของตัวละครเท่านั้นที่ส่งคำขอสัตว์เลี้ยงได้';
   end if;
 
-  select character.campaign_id
+  select character_row.campaign_id
   into target_campaign
-  from public.characters character
-  where character.id = target_character;
+  from public.characters character_row
+  where character_row.id = target_character;
 
   if target_campaign is null then
     raise exception using errcode = '22023', message = 'ตัวละครต้องอยู่ในแคมเปญก่อนสร้างสัตว์เลี้ยง';
@@ -950,9 +952,9 @@ begin
 
   if not exists (
     select 1
-    from storage.objects object
-    where object.bucket_id = 'pet-images'
-      and object.name = starting_image_path
+    from storage.objects storage_object
+    where storage_object.bucket_id = 'pet-images'
+      and storage_object.name = starting_image_path
   ) then
     raise exception using errcode = 'P0002', message = 'ไม่พบไฟล์รูปสัตว์เลี้ยงที่อัปโหลด';
   end if;
