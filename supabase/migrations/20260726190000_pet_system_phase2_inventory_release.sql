@@ -321,9 +321,7 @@ begin
     'right_hand', coalesce((enabled_slots->>'right_hand')::boolean, true)
   );
 
-  perform pg_catalog.set_config('search_path', 'public', true);
-  set constraints pet_inventory_items_pet_slot_unique deferred;
-  perform pg_catalog.set_config('search_path', '', true);
+  set constraints all deferred;
 
   with ranked_items as (
     select item.id,
